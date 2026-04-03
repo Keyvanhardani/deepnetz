@@ -51,6 +51,11 @@ CYTHON_MODULES = [
     "deepnetz/engine/planner.py",
     "deepnetz/engine/gguf_reader.py",
     "deepnetz/engine/downloader.py",
+    "deepnetz/engine/manager.py",
+    "deepnetz/engine/resolver.py",
+    "deepnetz/registry/store.py",
+    "deepnetz/registry/client.py",
+    "deepnetz/registry/config.py",
 ]
 
 # __init__.py files stay as Python (minimal, just imports)
@@ -98,7 +103,7 @@ class CleanSourceBuildExt(build_ext if build_ext else object):
 if __name__ == "__main__":
   setup(
     name="deepnetz",
-    version="1.0.4",
+    version="1.1.0",
     description="Run massive models on minimal hardware",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
