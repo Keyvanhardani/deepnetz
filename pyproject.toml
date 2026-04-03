@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "deepnetz"
+version = "0.1.0"
+description = "Run massive models on minimal hardware"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{name = "Keyvan Hardani", email = "hardani@hotmail.de"}]
+urls = {Homepage = "https://deepnetz.com", Repository = "https://github.com/Keyvanhardani/deepnetz"}
+
+[project.scripts]
+deepnetz = "deepnetz.cli:main"
