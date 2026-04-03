@@ -49,9 +49,11 @@ def create_app(model_path: str,
 
     monitor = get_monitor()
 
+    from typing import Any, Union
+
     class Message(PydanticBaseModel):
         role: str
-        content: str
+        content: Any  # str or list (for vision: [{type: "text"}, {type: "image_url"}])
 
     class ChatRequest(PydanticBaseModel):
         model: str = "deepnetz"
@@ -60,6 +62,7 @@ def create_app(model_path: str,
         temperature: float = 0.7
         stream: bool = False
         session_id: str = ""
+        reasoning: bool = False  # Enable reasoning mode
 
     @app.get("/v1/models")
     async def list_models():
@@ -77,6 +80,15 @@ def create_app(model_path: str,
             )
 
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+        # Reasoning mode: add reasoning instructions to last user message
+        if req.reasoning:
+            from deepnetz.engine.features import format_reasoning_prompt
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "user" and isinstance(messages[i]["content"], str):
+                    messages[i]["content"] = format_reasoning_prompt(messages[i]["content"], True)
+                    break
+
         config = GenerationConfig(
             max_tokens=req.max_tokens, temperature=req.temperature
         )
@@ -127,6 +139,20 @@ def create_app(model_path: str,
                              "message": {"role": "assistant", "content": response},
                              "finish_reason": "stop"}],
             }
+
+    @app.get("/v1/features")
+    async def features():
+        """List supported features based on current model."""
+        model = app.state.manager.get_active()
+        model_name = app.state.manager.model_ref if model else ""
+        from deepnetz.engine.features import is_vision_model, is_reasoning_model
+        return {
+            "vision": is_vision_model(model_name),
+            "reasoning": is_reasoning_model(model_name),
+            "tool_calling": True,
+            "streaming": True,
+            "speculative_decoding": False,  # Coming soon
+        }
 
     @app.get("/v1/stats")
     async def system_stats():

@@ -63,18 +63,67 @@ def cmd_run(args):
 
     model.load()
 
+    # Reasoning mode
+    reasoning = getattr(args, 'reasoning', False)
+    if reasoning:
+        from deepnetz.engine.features import format_reasoning_prompt
+
+    # Image input
+    image = getattr(args, 'image', None)
+
     if args.prompt:
-        # Single prompt mode
-        if args.stream:
-            for token in model.stream(args.prompt, max_tokens=args.max_tokens):
+        prompt = args.prompt
+        if reasoning:
+            prompt = format_reasoning_prompt(prompt, True)
+
+        if image:
+            # Vision mode
+            from deepnetz.engine.features import prepare_vision_message
+            msg = prepare_vision_message(prompt, image_paths=[image])
+            model.conversation.append(msg)
+            from deepnetz.backends.base import GenerationConfig
+            config = GenerationConfig(max_tokens=args.max_tokens)
+            response = model.backend.chat(model.conversation, config)
+            if reasoning:
+                from deepnetz.engine.features import parse_reasoning
+                thinking, answer = parse_reasoning(response)
+                if thinking:
+                    print(f"  Thinking: {thinking[:200]}...\n")
+                print(answer)
+            else:
+                print(response)
+        elif args.stream:
+            full = []
+            for token in model.stream(prompt, max_tokens=args.max_tokens):
+                full.append(token)
                 print(token, end="", flush=True)
             print()
+            if reasoning:
+                from deepnetz.engine.features import parse_reasoning
+                thinking, answer = parse_reasoning("".join(full))
+                if thinking:
+                    print(f"\n  [Reasoning: {thinking[:200]}...]")
         else:
-            response = model.chat(args.prompt, max_tokens=args.max_tokens)
-            print(response)
+            response = model.chat(prompt, max_tokens=args.max_tokens)
+            if reasoning:
+                from deepnetz.engine.features import parse_reasoning
+                thinking, answer = parse_reasoning(response)
+                if thinking:
+                    print(f"  Thinking: {thinking[:200]}...\n")
+                print(answer)
+            else:
+                print(response)
     else:
         # Interactive chat mode
-        print("  DeepNetz Chat (type 'exit' to quit)\n")
+        from deepnetz.engine.features import is_vision_model
+        has_vision = is_vision_model(args.model)
+        print(f"  DeepNetz Chat (type 'exit' to quit)")
+        if has_vision:
+            print(f"  Vision enabled — use /image <path> to send images")
+        if reasoning:
+            print(f"  Reasoning mode enabled")
+        print()
+
         while True:
             try:
                 user_input = input("  You: ").strip()
@@ -83,8 +132,33 @@ def cmd_run(args):
                 if not user_input:
                     continue
 
+                # Vision command: /image path.jpg describe this
+                if user_input.startswith("/image ") and has_vision:
+                    parts = user_input[7:].split(" ", 1)
+                    img_path = parts[0]
+                    img_prompt = parts[1] if len(parts) > 1 else "Describe this image."
+                    if reasoning:
+                        img_prompt = format_reasoning_prompt(img_prompt, True)
+                    from deepnetz.engine.features import prepare_vision_message
+                    from deepnetz.backends.base import GenerationConfig
+                    msg = prepare_vision_message(img_prompt, image_paths=[img_path])
+                    model.conversation.append(msg)
+                    config = GenerationConfig(max_tokens=args.max_tokens)
+                    print("  AI:  ", end="", flush=True)
+                    response = model.backend.chat(model.conversation, config)
+                    print(response)
+                    model.conversation.append({"role": "assistant", "content": response})
+                    print()
+                    continue
+
+                prompt = user_input
+                if reasoning:
+                    prompt = format_reasoning_prompt(prompt, True)
+
                 print("  AI:  ", end="", flush=True)
-                for token in model.stream(user_input, max_tokens=args.max_tokens):
+                full = []
+                for token in model.stream(prompt, max_tokens=args.max_tokens):
+                    full.append(token)
                     print(token, end="", flush=True)
                 print("\n")
 
@@ -323,6 +397,8 @@ def main():
     p_run.add_argument("--cpu", action="store_true", help="Force CPU-only mode")
     p_run.add_argument("--max-tokens", type=int, default=512, help="Max generation tokens")
     p_run.add_argument("--stream", action="store_true", default=True, help="Stream output")
+    p_run.add_argument("--image", help="Image path for vision models")
+    p_run.add_argument("--reasoning", action="store_true", help="Enable reasoning mode")
 
     # serve
     p_serve = subparsers.add_parser("serve", help="Start OpenAI-compatible API server")
