@@ -8,51 +8,54 @@ pip install deepnetz
 deepnetz run model.gguf                         # auto-detect hardware
 deepnetz run model.gguf --cpu                    # CPU-only
 deepnetz run model.gguf --gpu 8GB                # GPU with budget
-deepnetz run ollama://qwen3.5:35b                # load from Ollama
-deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF  # load from HuggingFace
+deepnetz run ollama://qwen3.5:35b                # from Ollama
+deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF  # from HuggingFace
+deepnetz run lmstudio://qwen3.5-35b             # from LM Studio
 deepnetz serve model.gguf --port 8080            # OpenAI-compatible API
 ```
 
-DeepNetz combines cutting-edge research into one framework that makes large language models run on consumer hardware — no A100 required.
+## What it does
+
+One framework. 6 backends. Any model. Any hardware.
+
+| You have | Without DeepNetz | With DeepNetz |
+|----------|-----------------|---------------|
+| RTX 4060 8GB + 32GB RAM | 8B model, 4K context | 122B model, 32K context |
+| 32GB RAM, no GPU | 7B model, 4K context | 35B model, 8K context |
+| RTX 3090 24GB + 64GB RAM | 70B model, 8K context | 122B model, 128K context |
 
 ## Quick start
 
 ```bash
-# Install
 pip install deepnetz
 
-# Check your hardware
+# Show your hardware + available backends
 deepnetz hardware
+deepnetz backends
 
-# Local GGUF file
+# Run a model (auto-detects everything)
 deepnetz run ./model.gguf
 
-# Load from Ollama (reads from ~/.ollama/models/)
+# Load from anywhere
 deepnetz run ollama://qwen3.5:35b
-
-# Load from HuggingFace (auto-downloads)
 deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF
-
-# Load from LM Studio cache
 deepnetz run lmstudio://qwen3.5-35b
 
-# CPU-only / GPU with budget
+# CPU-only / GPU budget
 deepnetz run model.gguf --cpu
 deepnetz run model.gguf --gpu 8GB --context 32k
 
-# Interactive chat
-deepnetz run model.gguf
-#   You: What is quantum computing?
-#   AI:  Quantum computing uses quantum mechanics to...
-
 # Single prompt
-deepnetz run model.gguf -p "Explain gravity in one sentence"
+deepnetz run model.gguf -p "Explain gravity"
 
-# OpenAI-compatible API server
+# API server with Web UI
 deepnetz serve model.gguf --port 8080
-# Then: curl http://localhost:8080/v1/chat/completions ...
+# Dashboard: http://localhost:8080/
+# Chat:      http://localhost:8080/chat
+# Models:    http://localhost:8080/models
+# API:       http://localhost:8080/v1/chat/completions
 
-# Download from HuggingFace
+# Download models
 deepnetz download Qwen3.5-35B --quant Q4_K_M
 ```
 
@@ -61,137 +64,144 @@ deepnetz download Qwen3.5-35B --quant Q4_K_M
 ```python
 from deepnetz import Model
 
-# Auto-detect hardware, optimize automatically
+# Auto everything
 model = Model("model.gguf")
 response = model.chat("Hello!")
 
-# CPU-only with custom context
-model = Model("model.gguf", cpu_only=True, target_context=8192)
+# CPU-only
+model = Model("model.gguf", cpu_only=True)
 
-# GPU with budget
-model = Model("model.gguf", gpu_budget="8GB", ram_budget="32GB")
+# Specific backend
+model = Model("model.gguf", backend="ollama")
 
 # Streaming
 for token in model.stream("Tell me a story"):
     print(token, end="", flush=True)
 ```
 
-## What it does
+## 6 Backends
 
-| You have | Without DeepNetz | With DeepNetz |
-|----------|-----------------|---------------|
-| RTX 4060 8GB + 32GB RAM | 8B model, 4K context | 122B model, 32K context |
-| 32GB RAM, no GPU | 7B model, 4K context | 35B model, 8K context |
-| RTX 3090 24GB + 64GB RAM | 70B model, 8K context | 122B model, 128K context |
+DeepNetz auto-detects which backends are installed and uses the best one:
 
-## How it works
+| Backend | Source | How it connects |
+|---------|--------|----------------|
+| **Native** | llama-cpp-python | Direct GGUF inference (fastest) |
+| **Ollama** | Ollama REST API | `localhost:11434` |
+| **vLLM** | vLLM Python/CLI | `vllm serve` or running instance |
+| **LM Studio** | lms CLI / REST | `localhost:1234` |
+| **HuggingFace** | transformers | Pipeline (safetensors only) |
+| **Remote** | Any OpenAI API | Custom endpoint |
 
-DeepNetz auto-detects your hardware, reads model metadata, and computes an optimal inference plan:
-
-```
-$ deepnetz info Qwen3.5-122B-A10B-IQ2_XXS.gguf --gpu 8GB
-
-  DeepNetz Hardware Profile
-  ────────────────────────────────────────
-  OS:       Linux
-  CPU:      16 cores
-  RAM:      31 GB
-  GPU 0:    NVIDIA GeForce RTX 4060 (8188 MB)
-
-  Model: Qwen3.5-122B-A10B
-  ────────────────────────────────────────
-  Parameters:  ~122B (MoE, 10B active)
-  Layers:      96
-  Heads:       64 Q / 4 KV
-  Head dim:    128
-  Context:     262,144
-  File size:   34.1 GB
-
-  DeepNetz Inference Plan
-  ──────────────────────────────────────────────────
-  Layers:     0 GPU + 96 CPU
-  KV Cache:   K=turbo4_0, V=turbo4_0 (compressed)
-  Context:    4,096 tokens
-  Memory:     ~34.2 GB total
-  Est. Speed: ~1.3 tok/s generation
+```bash
+deepnetz backends   # shows what's available on your system
 ```
 
-### The optimization stack
+## KV Cache Optimization
 
-DeepNetz stacks multiple techniques. Each gives 2-4x savings. Combined, they multiply:
+DeepNetz stacks compression techniques for up to 10x memory reduction:
 
 ```
 122B model, 32K context:
-
-KV Cache (naive):        ~16 GB  → doesn't fit
-  + TurboQuant (3.6x):     4.4 GB
-  + Token Eviction (2x):   2.2 GB
-  + KV Merging (1.5x):     1.5 GB  → fits!
+  KV Cache (naive):        ~16 GB → doesn't fit
+  + TurboQuant (3.6x):       4.4 GB
+  + Token Eviction (2x):     2.2 GB
+  + KV Merging (1.5x):       1.5 GB → fits!
 ```
 
-| Layer | Technique | Based on | Status |
-|-------|-----------|----------|--------|
-| **Cache Compression** | TurboQuant (WHT + Lloyd-Max) | [Google, ICLR 2026](https://arxiv.org/abs/2504.19874) | Implemented |
-| **Smart Offload** | Dynamic GPU/CPU layer split | [Q-Infer](https://dl.acm.org/doi/full/10.1145/3764589) | Implemented |
-| **Token Eviction** | Attention-aware pruning | [PagedEviction, EACL 2026](https://aclanthology.org/2026.findings-eacl.168.pdf) | Planned |
-| **Attention Sinks** | Keep first + recent tokens | [StreamingLLM](https://arxiv.org/abs/2309.17453) | Planned |
-| **KV Merging** | Merge similar tokens | CaM / D2O | Planned |
-| **Multi-Tier Cache** | Important tokens = high precision | [KVC-Q](https://www.sciencedirect.com/science/article/abs/pii/S1383762126000172) | Planned |
+| Technique | Based on | Effect |
+|-----------|----------|--------|
+| **TurboQuant** | [Google, ICLR 2026](https://arxiv.org/abs/2504.19874) | 3.6x KV compression |
+| **Attention Sinks** | [StreamingLLM](https://arxiv.org/abs/2309.17453) | Fixed memory for infinite context |
+| **Token Eviction** | [PagedEviction](https://aclanthology.org/2026.findings-eacl.168.pdf) | Remove unimportant tokens |
+| **KV Merging** | CaM / D2O | Merge similar tokens |
 
-### What makes it different
+## Web UI
 
-**Ollama / LMStudio**: Load model, hope it fits. No KV optimization, no smart offloading.
+`deepnetz serve model.gguf` starts a web dashboard at `http://localhost:8080/`:
 
-**vLLM / SGLang**: Server-focused, needs beefy GPUs, not for your laptop.
+- **Dashboard** — Live CPU, RAM, GPU, VRAM, temperature monitoring
+- **Chat** — Streaming chat interface
+- **Models** — Browse and manage models from all backends
 
-**DeepNetz**: One command. Detects your hardware, picks the right optimizations, runs the model. CPU and GPU. Consumer-first.
+## Tool Calling
+
+Built-in internet search, extensible tool framework:
+
+```python
+from deepnetz.tools.registry import ToolRegistry
+
+registry = ToolRegistry()  # web_search built-in
+result = registry.execute("web_search", {"query": "latest news"})
+```
+
+OpenAI-compatible function calling via `/v1/chat/completions`.
 
 ## Benchmarks
 
 Tested on 9 models from 3B to 122B on RTX 4060 (8GB) + 32GB RAM:
 
-| Model | f16 PPL | turbo4_0 PPL | Delta | Generation |
-|-------|---------|-------------|-------|------------|
-| Llama-3.2-3B Q4_K_M | 9.77 | 9.82 | **+0.4%** | — |
-| Qwen3-4B Q4_K_M | 17.78 | 16.61 | **-6.6%** | — |
-| Gemma-3-27B Q2_K | 8.53 | 8.70 | +2.0% | 2.3 tok/s |
-| Qwen3.5-35B-A3B Q4_K_XL | 5.91 | 6.07 | +2.7% | 7.4 tok/s |
-| Llama-3.3-70B IQ2_M | 4.91 | — | — | 0.7 tok/s |
-| Qwen3.5-122B-A10B IQ2_XXS | — | — | — | 1.3 tok/s |
-
-[Full benchmark data + TurboQuant standalone library](https://github.com/Keyvanhardani/turboquant-ggml)
+| Model | PPL Delta | Speed | KV Compression |
+|-------|-----------|-------|---------------|
+| Llama-3.2-3B | +0.4% | — | 3.6x |
+| Gemma-3-27B | +2.0% | 2.3 tok/s | 3.6x |
+| Qwen3.5-35B | +2.7% | 7.4 tok/s | 3.6x |
+| Llama-3.3-70B | — | 0.7 tok/s | — |
+| Qwen3.5-122B | — | 1.3 tok/s | — |
 
 ## Architecture
 
 ```
 deepnetz/
-├── __init__.py              # from deepnetz import Model
-├── cli.py                   # deepnetz run/serve/info/hardware/download
-├── server.py                # OpenAI-compatible FastAPI server
-└── engine/
-    ├── model.py             # Main Model class
-    ├── backend.py           # llama-cpp-python wrapper
-    ├── hardware.py          # GPU/CPU/RAM auto-detection
-    ├── planner.py           # Budget → optimal inference plan
-    ├── gguf_reader.py       # Fast GGUF metadata extraction
-    └── downloader.py        # HuggingFace model download
+├── __init__.py                  # from deepnetz import Model
+├── cli.py                       # CLI (run/serve/info/hardware/backends/download)
+├── server.py                    # FastAPI + WebSocket + OpenAI API
+├── errors.py                    # Error hierarchy
+├── engine/
+│   ├── model.py                 # Main orchestrator
+│   ├── hardware.py              # GPU/CPU/RAM detection
+│   ├── monitor.py               # Real-time system stats
+│   ├── planner.py               # Budget → inference plan
+│   ├── gguf_reader.py           # GGUF metadata extraction
+│   ├── resolver.py              # Universal model resolver (8 sources)
+│   ├── downloader.py            # HuggingFace download
+│   ├── scanner.py               # Local model discovery
+│   ├── session.py               # SQLite conversation persistence
+│   └── evaluator.py             # Output quality scoring
+├── backends/
+│   ├── base.py                  # Adapter interface
+│   ├── native.py                # llama-cpp-python
+│   ├── ollama.py                # Ollama REST API
+│   ├── vllm.py                  # vLLM
+│   ├── lmstudio.py              # LM Studio
+│   ├── huggingface.py           # transformers
+│   ├── remote.py                # Any OpenAI API
+│   └── discovery.py             # Auto-detect backends
+├── cache/
+│   ├── turboquant.py            # TurboQuant KV compression
+│   ├── eviction.py              # Attention sink eviction
+│   └── merging.py               # KV entry merging
+├── tools/
+│   ├── base.py                  # Tool protocol
+│   ├── search.py                # Web search (DuckDuckGo)
+│   └── registry.py              # Tool management + parser
+└── ui/
+    ├── routes.py                # Web UI routes
+    ├── static/                  # JS, CSS
+    └── templates/               # Dashboard, Chat, Models HTML
 ```
 
-## Roadmap
+## What makes it different
 
-- [x] Hardware auto-detection + budget planner
-- [x] GGUF metadata reader
-- [x] llama-cpp-python inference backend
-- [x] CLI tool (`deepnetz run/info/serve/hardware/download`)
-- [x] CPU + GPU + hybrid mode
-- [x] Interactive chat + single prompt + streaming
-- [x] OpenAI-compatible API server
-- [x] Model downloader with auto quant selection
-- [x] TurboQuant KV cache compression ([turboquant-ggml](https://github.com/Keyvanhardani/turboquant-ggml))
-- [ ] Token eviction (attention sinks + scoring)
-- [ ] KV merging (CaM/D2O)
-- [ ] Multi-tier adaptive cache
-- [ ] Web UI
+| Feature | Ollama | LM Studio | vLLM | **DeepNetz** |
+|---------|--------|-----------|------|-------------|
+| Load from anywhere | Own registry | Own catalog | HuggingFace | **All of them** |
+| KV Cache Compression | No | No | No | **TurboQuant 3.6x** |
+| Multi-Backend | No | No | No | **6 backends** |
+| Hardware Auto-Tuning | Basic | Basic | No | **Budget planner** |
+| Web UI + Monitoring | No | Yes (closed) | No | **Yes** |
+| Tool Calling | No | No | Yes | **Yes + Search** |
+| CPU Optimized | Yes | Yes | No | **Yes + KV compression** |
+| Quality Scoring | No | No | No | **Yes** |
 
 ## Author
 
@@ -199,4 +209,4 @@ deepnetz/
 
 ## License
 
-MIT
+Proprietary. Distributed as compiled binaries via PyPI.
