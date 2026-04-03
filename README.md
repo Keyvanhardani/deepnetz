@@ -138,9 +138,44 @@ deepnetz serve model.gguf --port 8080
 # Open https://deepnetz.com/app → Connect to localhost:8080
 ```
 
-Features: Chat with streaming, model search & pull, model switching, system monitor, settings.
+Features: Chat with streaming, vision (image upload), reasoning mode, model search & pull, model switching, system monitor, settings.
 
 Or use the built-in UI at `http://localhost:8080/chat`.
+
+## Vision & Multimodal
+
+Send images to vision models (Gemma 4, Qwen-VL, LLaVA):
+
+```bash
+deepnetz run qwen3-vl:8b --image photo.jpg -p "What's in this image?"
+deepnetz run qwen3-vl:8b   # interactive: use /image path.jpg
+```
+
+## Reasoning Mode
+
+Enable step-by-step reasoning (DeepSeek-R1, QwQ):
+
+```bash
+deepnetz run deepseek-r1:14b --reasoning -p "Solve: 2x + 5 = 13"
+```
+
+## Speculative Decoding
+
+Use a small draft model for 1.5-2x faster generation:
+
+```bash
+deepnetz run Qwen3.5-35B --draft Llama-3.2-3B
+```
+
+## Model Optimizer
+
+Analyze models and get optimization recommendations:
+
+```bash
+deepnetz optimize model.gguf          # Analysis + recommendations
+deepnetz optimize --install-ik-llama  # 1.3-1.5x faster CUDA kernels
+deepnetz convert hf://user/repo --quant Q4_K_M   # HF → GGUF
+```
 
 ## Benchmarks
 
@@ -169,6 +204,10 @@ deepnetz/
 │   ├── session.py               # SQLite conversation persistence
 │   ├── resolver.py              # Universal model resolver (8 sources)
 │   ├── downloader.py            # Model download wrapper
+│   ├── features.py              # Vision, Reasoning, Tool Calling, MoE detection
+│   ├── speculative.py           # Token-level speculative decoding
+│   ├── optimize.py              # Model analysis + optimization recommendations
+│   ├── converter.py             # HF → GGUF converter
 │   ├── gguf_reader.py           # GGUF metadata extraction
 │   ├── scanner.py               # Local model discovery
 │   └── evaluator.py             # Output quality scoring
@@ -193,12 +232,18 @@ deepnetz/
 | Feature | Ollama | LM Studio | vLLM | **DeepNetz** |
 |---------|--------|-----------|------|-------------|
 | Load from anywhere | Own registry | Own catalog | HuggingFace | **All of them** |
-| KV Cache Compression | No | No | No | **TurboQuant 3.6x** |
+| KV Cache Compression | No | No | No | **q4_0/q8_0 (3.6x)** |
 | Multi-Backend | No | No | No | **6 backends** |
 | Hardware Auto-Tuning | Basic | Basic | No | **Budget planner** |
-| Web UI | No | Yes (closed) | No | **Yes (open)** |
+| Vision/Multimodal | No | Yes | No | **Yes (API + UI)** |
+| Reasoning Mode | No | No | No | **Yes (think tags)** |
+| Speculative Decoding | No | Experimental | No | **Token-level** |
+| Model Optimizer | No | No | No | **APEX + ik_llama** |
+| MoE Detection | No | No | No | **APEX recommendations** |
+| Web UI | No | Yes (closed) | No | **Yes (hosted + local)** |
 | Model Registry | Proprietary | No | No | **Own + HuggingFace** |
-| Tool Calling | No | No | Yes | **Yes + Search** |
+| OAuth Login | No | No | No | **GitHub + Google** |
+| Tool Calling | No | No | Yes | **Yes + Web Search** |
 
 ## Contributing
 
