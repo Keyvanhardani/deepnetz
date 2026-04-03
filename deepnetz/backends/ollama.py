@@ -44,11 +44,11 @@ class OllamaBackend(BackendAdapter):
             req = urllib.request.Request(url, method=method)
 
         try:
-            resp = urllib.request.urlopen(req, timeout=30)
+            resp = urllib.request.urlopen(req, timeout=120)
             if stream:
                 return resp  # caller reads line by line
             return json.loads(resp.read().decode())
-        except urllib.error.URLError:
+        except (urllib.error.URLError, ConnectionResetError, OSError):
             return None
 
     def detect(self) -> BackendInfo:
@@ -95,14 +95,16 @@ class OllamaBackend(BackendAdapter):
              kv_type_k: str = "f16", kv_type_v: str = "f16",
              **kwargs) -> None:
         self._model = model_ref
-        # Ollama loads on first request, no explicit load needed
-        # But we can warm it up with a tiny request
-        self._request("/api/generate", {
-            "model": model_ref,
-            "prompt": "hi",
-            "options": {"num_predict": 1, "num_ctx": n_ctx},
-            "stream": False,
-        })
+        # Ollama loads on first request — warmup (non-blocking if fails)
+        try:
+            self._request("/api/generate", {
+                "model": model_ref,
+                "prompt": "hi",
+                "options": {"num_predict": 1, "num_ctx": min(n_ctx, 2048)},
+                "stream": False,
+            })
+        except Exception:
+            pass  # Model will load on first real request
         self._loaded = True
 
     def chat(self, messages: List[Dict[str, str]],
