@@ -23,6 +23,22 @@ def cmd_hardware(args):
     print_hardware(hw)
 
 
+def cmd_backends(args):
+    from deepnetz.backends.discovery import discover_backends, print_backends
+    backends = discover_backends()
+    print_backends(backends)
+    for b in backends:
+        models = b.list_models()
+        if models:
+            print(f"  {b.name} models:")
+            for m in models[:10]:
+                size = f"{m.size_mb}MB" if m.size_mb else ""
+                print(f"    {m.name} {size}")
+            if len(models) > 10:
+                print(f"    ... +{len(models)-10} more")
+            print()
+
+
 def cmd_info(args):
     from deepnetz.engine.model import Model
     model = Model(
@@ -120,12 +136,16 @@ def main():
     # hardware
     subparsers.add_parser("hardware", help="Show hardware profile")
 
+    # backends
+    subparsers.add_parser("backends", help="Show available inference backends")
+
     # info
     p_info = subparsers.add_parser("info", help="Show model info + inference plan")
     p_info.add_argument("model", help="Path to GGUF model file")
     p_info.add_argument("--gpu", default="auto", help="GPU budget (e.g., 8GB, 0 for CPU-only)")
     p_info.add_argument("--ram", default="auto", help="RAM budget")
     p_info.add_argument("--context", default="4096", help="Context length (e.g., 4096, 32k)")
+    p_info.add_argument("--backend", default="auto", help="Force backend (native, ollama, vllm, lmstudio, hf, remote)")
     p_info.add_argument("--cpu", action="store_true", help="Force CPU-only mode")
 
     # run
@@ -135,6 +155,7 @@ def main():
     p_run.add_argument("--gpu", default="auto", help="GPU budget (e.g., 8GB)")
     p_run.add_argument("--ram", default="auto", help="RAM budget")
     p_run.add_argument("--context", default="4096", help="Context length (e.g., 4096, 32k)")
+    p_run.add_argument("--backend", default="auto", help="Force backend")
     p_run.add_argument("--cpu", action="store_true", help="Force CPU-only mode")
     p_run.add_argument("--max-tokens", type=int, default=512, help="Max generation tokens")
     p_run.add_argument("--stream", action="store_true", default=True, help="Stream output")
@@ -147,6 +168,7 @@ def main():
     p_serve.add_argument("--gpu", default="auto")
     p_serve.add_argument("--ram", default="auto")
     p_serve.add_argument("--context", default="4096")
+    p_serve.add_argument("--backend", default="auto", help="Force backend")
     p_serve.add_argument("--cpu", action="store_true")
 
     # download
@@ -159,6 +181,7 @@ def main():
 
     commands = {
         "hardware": cmd_hardware,
+        "backends": cmd_backends,
         "info": cmd_info,
         "run": cmd_run,
         "serve": cmd_serve,

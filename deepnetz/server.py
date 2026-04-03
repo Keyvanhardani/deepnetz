@@ -1,55 +1,37 @@
 """
-DeepNetz API Server — OpenAI-compatible /v1/chat/completions endpoint.
-
-Usage:
-    deepnetz serve model.gguf --port 8080
-
-Then use with any OpenAI-compatible client:
-    from openai import OpenAI
-    client = OpenAI(base_url="http://localhost:8080/v1", api_key="none")
-    response = client.chat.completions.create(
-        model="deepnetz",
-        messages=[{"role": "user", "content": "Hello!"}]
-    )
+DeepNetz API Server — OpenAI-compatible + monitoring + backends.
 """
 
 import json
 import time
-from typing import Optional
-
-from deepnetz.engine.model import Model
+from typing import List, Optional
 
 
 def create_app(model_path: str,
                gpu_budget: str = "auto",
                ram_budget: str = "auto",
                target_context: int = 4096,
-               cpu_only: bool = False):
-    """Create FastAPI app with loaded model."""
-
+               cpu_only: bool = False,
+               backend: str = "auto"):
     try:
-        from fastapi import FastAPI, Request
+        from fastapi import FastAPI, WebSocket, WebSocketDisconnect
         from fastapi.responses import StreamingResponse, JSONResponse
         from pydantic import BaseModel as PydanticBaseModel
-        from typing import List, Optional as Opt
     except ImportError:
         raise ImportError("pip install fastapi uvicorn")
 
-    app = FastAPI(
-        title="DeepNetz API",
-        description="OpenAI-compatible API powered by DeepNetz",
-        version="0.1.0",
-    )
+    from deepnetz.engine.model import Model
+    from deepnetz.engine.monitor import get_monitor
+    from deepnetz.backends.base import GenerationConfig
 
-    # Load model at startup
+    app = FastAPI(title="DeepNetz API", version="0.3.0")
+
     model = Model(
-        model_path,
-        gpu_budget=gpu_budget,
-        ram_budget=ram_budget,
-        target_context=target_context,
-        cpu_only=cpu_only,
+        model_path, gpu_budget=gpu_budget, ram_budget=ram_budget,
+        target_context=target_context, cpu_only=cpu_only, backend=backend,
     )
     model.load()
+    monitor = get_monitor()
 
     class Message(PydanticBaseModel):
         role: str
@@ -64,65 +46,67 @@ def create_app(model_path: str,
 
     @app.get("/v1/models")
     async def list_models():
-        return {
-            "object": "list",
-            "data": [{
-                "id": "deepnetz",
-                "object": "model",
-                "owned_by": "deepnetz",
-                "meta": {
-                    "name": model.spec.name,
-                    "parameters": f"{model.spec.n_params_b}B",
-                    "layers": model.spec.n_layers,
-                    "context": model.plan.max_context,
-                    "kv_cache": model.plan.kv_type_k,
-                }
-            }]
-        }
+        models = []
+        for b in model.backends:
+            for m in b.list_models():
+                models.append({"id": m.name, "backend": m.backend,
+                               "size_mb": m.size_mb})
+        return {"object": "list", "data": models}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(req: ChatRequest):
-        prompt = req.messages[-1].content
+        messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        config = GenerationConfig(
+            max_tokens=req.max_tokens, temperature=req.temperature
+        )
 
         if req.stream:
             async def generate():
-                for token in model.stream(prompt, max_tokens=req.max_tokens,
-                                          temperature=req.temperature):
+                for token in model.backend.stream(messages, config):
                     chunk = {
                         "id": f"chatcmpl-{int(time.time())}",
                         "object": "chat.completion.chunk",
                         "model": "deepnetz",
-                        "choices": [{
-                            "index": 0,
-                            "delta": {"content": token},
-                            "finish_reason": None
-                        }]
+                        "choices": [{"index": 0, "delta": {"content": token},
+                                     "finish_reason": None}]
                     }
                     yield f"data: {json.dumps(chunk)}\n\n"
                 yield "data: [DONE]\n\n"
-
             return StreamingResponse(generate(), media_type="text/event-stream")
         else:
-            response = model.chat(prompt, max_tokens=req.max_tokens,
-                                  temperature=req.temperature)
+            response = model.backend.chat(messages, config)
             return {
                 "id": f"chatcmpl-{int(time.time())}",
                 "object": "chat.completion",
                 "model": "deepnetz",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": response},
-                    "finish_reason": "stop"
-                }],
-                "usage": {
-                    "prompt_tokens": len(prompt.split()),
-                    "completion_tokens": len(response.split()),
-                    "total_tokens": len(prompt.split()) + len(response.split())
-                }
+                "choices": [{"index": 0,
+                             "message": {"role": "assistant", "content": response},
+                             "finish_reason": "stop"}],
             }
+
+    @app.get("/v1/stats")
+    async def system_stats():
+        return monitor.get_stats().to_dict()
+
+    @app.get("/v1/backends")
+    async def list_backends():
+        return [{"name": b.name, **b.detect().__dict__} for b in model.backends]
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "model": model.spec.name}
+        return {"status": "ok", "backend": model.backend.name,
+                "model": model.model_ref}
+
+    @app.websocket("/ws/monitor")
+    async def ws_monitor(ws: WebSocket):
+        await ws.accept()
+        try:
+            while True:
+                stats = monitor.get_stats()
+                await ws.send_json(stats.to_dict())
+                import asyncio
+                await asyncio.sleep(1)
+        except WebSocketDisconnect:
+            pass
 
     return app

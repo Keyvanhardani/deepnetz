@@ -1,16 +1,13 @@
 """
-DeepNetz Model — the main entry point.
-
-Handles model loading, inference planning, and execution.
-Supports GPU, CPU, and hybrid GPU+CPU modes.
+DeepNetz Model — orchestrates backend selection, planning, and inference.
 """
 
 import os
-from typing import Optional, Generator
-from deepnetz.engine.hardware import detect_hardware, print_hardware, GPUInfo
+from typing import Optional, Generator, List, Dict
+from deepnetz.engine.hardware import detect_hardware, print_hardware
 from deepnetz.engine.planner import ModelSpec, plan_inference, print_plan
-from deepnetz.engine.gguf_reader import gguf_to_model_spec, print_model_info
-from deepnetz.engine.backend import DeepNetzBackend
+from deepnetz.backends.base import BackendAdapter, GenerationConfig
+from deepnetz.backends.discovery import discover_backends, select_best_backend, get_backend
 
 
 class Model:
@@ -18,115 +15,142 @@ class Model:
     Load and run a model with automatic hardware optimization.
 
     Usage:
-        # Auto-detect everything
-        model = Model("path/to/model.gguf")
+        model = Model("model.gguf")                    # auto everything
+        model = Model("ollama://qwen3.5:35b")           # use Ollama
+        model = Model("model.gguf", cpu_only=True)       # CPU only
+        model = Model("model.gguf", backend="ollama")    # force backend
 
-        # Explicit budgets
-        model = Model("model.gguf", gpu_budget="8GB", ram_budget="32GB")
-
-        # CPU-only
-        model = Model("model.gguf", gpu_budget="0")
-
-        # Chat
         response = model.chat("Hello!")
-
-        # Stream
         for token in model.stream("Tell me a story"):
-            print(token, end="", flush=True)
+            print(token, end="")
     """
 
-    def __init__(self, model_path: str,
+    def __init__(self, model_ref: str,
                  gpu_budget: str = "auto",
                  ram_budget: str = "auto",
                  target_context: int = 4096,
                  cpu_only: bool = False,
+                 backend: str = "auto",
                  verbose: bool = True):
 
-        self.model_path = model_path
+        self.model_ref = model_ref
         self.verbose = verbose
+        self.conversation: List[Dict[str, str]] = []
 
         # Detect hardware
         self.hw = detect_hardware()
-
-        # Force CPU-only if requested
         if cpu_only:
             self.hw.gpus = []
             self.hw.total_vram_mb = 0
             self.hw.has_cuda = False
-
         if verbose:
             print_hardware(self.hw)
 
         # Parse budgets
         gpu_mb = self._parse_budget(gpu_budget, self.hw.total_vram_mb)
         ram_mb = self._parse_budget(ram_budget, self.hw.ram_mb)
-
-        # Force CPU-only if gpu_budget is 0
         if gpu_mb == 0:
             self.hw.gpus = []
             self.hw.total_vram_mb = 0
             self.hw.has_cuda = False
 
-        # Resolve model path (supports ollama://, hf://, lmstudio://, URLs, local)
-        from deepnetz.engine.resolver import resolve_model
-        try:
-            self.model_path = resolve_model(model_path)
-            model_path = self.model_path
-        except FileNotFoundError:
-            pass  # Will fail at gguf_to_model_spec below
+        # Discover backends
+        self.backends = discover_backends()
+        if verbose and self.backends:
+            from deepnetz.backends.discovery import print_backends
+            print_backends(self.backends)
 
-        # Read model specs from GGUF
-        if os.path.exists(model_path):
-            self.spec = gguf_to_model_spec(model_path)
+        # Select backend
+        if backend != "auto":
+            self.backend = get_backend(backend)
+            if not self.backend:
+                raise RuntimeError(f"Backend '{backend}' not available")
+        else:
+            self.backend = select_best_backend(model_ref, self.backends)
+            if not self.backend:
+                raise RuntimeError("No inference backend available. Install llama-cpp-python or Ollama.")
+
+        # Resolve model path (for native backend)
+        self.model_path = model_ref
+        if self.backend.name == "native" and not model_ref.startswith(("ollama://", "http")):
+            from deepnetz.engine.resolver import resolve_model
+            try:
+                self.model_path = resolve_model(model_ref)
+            except FileNotFoundError:
+                pass
+
+        # Read GGUF specs (if local file)
+        self.spec = None
+        if os.path.exists(self.model_path):
+            from deepnetz.engine.gguf_reader import gguf_to_model_spec, print_model_info
+            self.spec = gguf_to_model_spec(self.model_path)
             if verbose:
                 print_model_info(self.spec)
-        else:
-            raise FileNotFoundError(
-                f"Model not found: {model_path}\n\n"
-                f"Supported sources:\n"
-                f"  deepnetz run ./model.gguf\n"
-                f"  deepnetz run ollama://qwen3.5:35b\n"
-                f"  deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF\n"
-                f"  deepnetz run lmstudio://model-name\n"
-                f"  deepnetz download Qwen3.5-35B\n"
-            )
 
         # Plan inference
-        self.plan = plan_inference(
-            self.spec, self.hw,
-            target_context=target_context,
-            gpu_budget_mb=gpu_mb,
-            ram_budget_mb=ram_mb
-        )
-        if verbose:
-            print_plan(self.plan, self.spec)
+        if self.spec:
+            self.plan = plan_inference(
+                self.spec, self.hw,
+                target_context=target_context,
+                gpu_budget_mb=gpu_mb,
+                ram_budget_mb=ram_mb
+            )
+            if verbose:
+                print_plan(self.plan, self.spec)
+        else:
+            self.plan = None
 
-        # Create backend
-        self.backend = DeepNetzBackend(
-            model_path=model_path,
-            plan=self.plan,
-            hw=self.hw,
-            spec=self.spec
-        )
+        if verbose:
+            print(f"  Backend: {self.backend.name}\n")
 
     def load(self):
-        """Pre-load the model (otherwise loaded on first use)."""
-        self.backend.load(verbose=self.verbose)
+        """Pre-load model."""
+        if self.plan and self.backend.name == "native":
+            self.backend.load(
+                self.model_path,
+                n_ctx=self.plan.max_context,
+                n_gpu_layers=self.plan.n_gpu_layers,
+                n_threads=self.hw.cpu_cores,
+                kv_type_k=self.plan.kv_type_k,
+                kv_type_v=self.plan.kv_type_v,
+            )
+        else:
+            self.backend.load(self.model_ref)
         return self
 
     def chat(self, prompt: str, max_tokens: int = 512,
              temperature: float = 0.7) -> str:
-        """Chat with the model. Returns full response."""
-        return self.backend.chat(prompt, max_tokens, temperature, stream=False)
+        """Chat with conversation history."""
+        if not self.backend.is_loaded:
+            self.load()
+
+        self.conversation.append({"role": "user", "content": prompt})
+        config = GenerationConfig(
+            max_tokens=max_tokens, temperature=temperature
+        )
+        response = self.backend.chat(self.conversation, config)
+        self.conversation.append({"role": "assistant", "content": response})
+        return response
 
     def stream(self, prompt: str, max_tokens: int = 512,
                temperature: float = 0.7) -> Generator:
-        """Stream response token by token."""
-        return self.backend.chat(prompt, max_tokens, temperature, stream=True)
+        """Stream with conversation history."""
+        if not self.backend.is_loaded:
+            self.load()
 
-    def complete(self, prompt: str, max_tokens: int = 256) -> str:
-        """Raw text completion (no chat template)."""
-        return self.backend.complete(prompt, max_tokens)
+        self.conversation.append({"role": "user", "content": prompt})
+        config = GenerationConfig(
+            max_tokens=max_tokens, temperature=temperature
+        )
+        full_response = []
+        for token in self.backend.stream(self.conversation, config):
+            full_response.append(token)
+            yield token
+        self.conversation.append({"role": "assistant", "content": "".join(full_response)})
+
+    def reset(self):
+        """Clear conversation history."""
+        self.conversation = []
 
     @staticmethod
     def _parse_budget(budget: str, auto_value: int) -> int:
