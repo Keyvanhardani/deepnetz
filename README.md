@@ -1,6 +1,9 @@
-# DeepNetz
+<p align="center">
+  <img src="assets/logo.png" width="120" alt="DeepNetz Logo">
+</p>
 
-**Run massive models on minimal hardware.**
+<h1 align="center">DeepNetz</h1>
+<p align="center"><strong>Run massive models on minimal hardware.</strong></p>
 
 [![PyPI](https://img.shields.io/pypi/v/deepnetz)](https://pypi.org/project/deepnetz/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
