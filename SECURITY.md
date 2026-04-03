@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability, please report it via [GitHub Issues](https://github.com/Keyvanhardani/deepnetz/issues) with the label `security`.
 
-Do NOT include exploit details in public issues. Email hardani@hotmail.de for sensitive reports.
+Do NOT include exploit details in public issues. Email hello@keyvan.ai for sensitive reports.
 
 ## Security Design
 
