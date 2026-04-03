@@ -98,7 +98,7 @@ class CleanSourceBuildExt(build_ext if build_ext else object):
 if __name__ == "__main__":
   setup(
     name="deepnetz",
-    version="1.0.3",
+    version="1.0.4",
     description="Run massive models on minimal hardware",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
