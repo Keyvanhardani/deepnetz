@@ -124,7 +124,7 @@ def select_best_backend(model_ref: str, backends: List[BackendAdapter]) -> Optio
 def print_backends(backends: List[BackendAdapter]):
     """Pretty-print available backends."""
     print(f"\n  DeepNetz Backends")
-    print(f"  {'─' * 50}")
+    print(f"  {'-' * 50}")
     for b in backends:
         info = b.detect()
         models = b.list_models()

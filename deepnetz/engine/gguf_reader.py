@@ -156,7 +156,7 @@ def gguf_to_model_spec(path: str) -> ModelSpec:
 def print_model_info(spec: ModelSpec, meta: Optional[dict] = None):
     """Pretty-print model info."""
     print(f"\n  Model: {spec.name}")
-    print(f"  {'─' * 40}")
+    print(f"  {'-' * 40}")
     print(f"  Parameters:  ~{spec.n_params_b}B" +
           (" (MoE)" if spec.is_moe else ""))
     print(f"  Layers:      {spec.n_layers}")

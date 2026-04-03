@@ -112,7 +112,7 @@ def detect_hardware() -> HardwareProfile:
 def print_hardware(hw: HardwareProfile):
     """Pretty-print hardware info."""
     print(f"\n  DeepNetz Hardware Profile")
-    print(f"  {'─' * 40}")
+    print(f"  {'-' * 40}")
     print(f"  OS:       {hw.os}")
     print(f"  CPU:      {hw.cpu_cores} cores")
     print(f"  RAM:      {hw.ram_mb // 1024} GB")

@@ -177,7 +177,7 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
 def print_plan(plan: InferencePlan, model: ModelSpec):
     """Pretty-print the inference plan."""
     print(f"\n  DeepNetz Inference Plan — {model.name}")
-    print(f"  {'─' * 50}")
+    print(f"  {'-' * 50}")
     print(f"  Layers:     {plan.n_gpu_layers} GPU + {plan.n_cpu_layers} CPU")
     print(f"  KV Cache:   K={plan.kv_type_k}, V={plan.kv_type_v} ({plan.kv_cache_mb:.0f} MB)")
     print(f"  Context:    {plan.max_context:,} tokens")
