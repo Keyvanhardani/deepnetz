@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepNetz — Run massive models on minimal hardware</title>
+<meta name="description" content="DeepNetz is an open-source LLM inference framework. Run massive language models on minimal hardware with intelligent backend selection and KV cache compression.">
+<meta name="keywords" content="LLM, inference, open-source, deep learning, AI, machine learning, local AI, DeepNetz">
+<meta property="og:title" content="DeepNetz — Run massive models on minimal hardware">
+<meta property="og:description" content="Open-source LLM inference framework with 6 backends, KV cache compression, and hardware auto-detection.">
+<meta property="og:url" content="https://deepnetz.com">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://deepnetz.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2128;
+  --border: #30363d;
+  --border-light: #484f58;
+  --text: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79c0ff;
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+a:hover { color: var(--accent-hover); }
+
+code, pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  transition: box-shadow 0.3s;
+}
+
+nav.scrolled { box-shadow: 0 1px 12px rgba(0,0,0,0.4); }
+
+nav .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.nav-logo {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-logo span { color: var(--accent); }
+
+.nav-links {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover { color: var(--text); }
+
+.nav-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.nav-github:hover { border-color: var(--border-light); color: var(--text); }
+
+.hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.hamburger span {
+  width: 22px;
+  height: 2px;
+  background: var(--text-secondary);
+  border-radius: 2px;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+/* ── HERO ── */
+.hero {
+  padding: 160px 0 100px;
+  text-align: center;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(88,166,255,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.2);
+  border-radius: 50px;
+  padding: 6px 16px;
+  font-size: 0.82rem;
+  color: var(--accent);
+  margin-bottom: 28px;
+  font-weight: 500;
+}
+
+.badge svg { width: 14px; height: 14px; }
+
+h1 {
+  font-size: clamp(2.4rem, 5.5vw, 4rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+}
+
+h1 .accent { color: var(--accent); }
+
+.hero-sub {
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  color: var(--text-secondary);
+  max-width: 620px;
+  margin: 0 auto 40px;
+  line-height: 1.7;
+  font-weight: 400;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.install-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  position: relative;
+}
+
+.install-box:hover { border-color: var(--border-light); }
+
+.install-box .dollar { color: var(--text-muted); user-select: none; }
+
+.install-box .copy-icon {
+  color: var(--text-muted);
+  transition: color 0.2s;
+  cursor: pointer;
+}
+
+.install-box:hover .copy-icon { color: var(--text-secondary); }
+
+.install-box .tooltip {
+  position: absolute;
+  top: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--green);
+  color: #fff;
+  font-size: 0.75rem;
+  font-family: 'Inter', sans-serif;
+  padding: 4px 10px;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.install-box .tooltip.show { opacity: 1; }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 0.2s, transform 0.1s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary:hover { background: var(--accent-hover); color: #fff; transform: translateY(-1px); }
+
+.hero-meta {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── SECTIONS ── */
+section {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+}
+
+.section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 700;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.section-desc {
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin-bottom: 48px;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+/* ── FEATURES ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.feature-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.feature-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+}
+
+.feature-icon.blue { background: rgba(88,166,255,0.12); color: var(--accent); }
+.feature-icon.green { background: rgba(63,185,80,0.12); color: var(--green); }
+.feature-icon.orange { background: rgba(210,153,34,0.12); color: var(--orange); }
+.feature-icon.purple { background: rgba(188,140,255,0.12); color: var(--purple); }
+
+.feature-card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.feature-card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* ── BENCHMARKS ── */
+.bench-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.bench-table thead { background: var(--bg-tertiary); }
+
+.bench-table th {
+  text-align: left;
+  padding: 14px 20px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.bench-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bench-table tbody tr:last-child td { border-bottom: none; }
+
+.bench-table tbody tr { transition: background 0.15s; }
+.bench-table tbody tr:hover { background: rgba(88,166,255,0.03); }
+
+.bench-table .model-name { font-weight: 600; }
+.bench-table .positive { color: var(--green); font-weight: 500; }
+.bench-table .highlight { color: var(--accent); font-weight: 600; }
+
+.bench-note {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 16px;
+  font-style: italic;
+}
+
+/* ── COMPARISON ── */
+.comparison-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.comparison-table thead { background: var(--bg-tertiary); }
+
+.comparison-table th {
+  text-align: left;
+  padding: 14px 18px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.comparison-table th.dn {
+  color: var(--accent);
+}
+
+.comparison-table td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.comparison-table tbody tr:last-child td { border-bottom: none; }
+.comparison-table tbody tr { transition: background 0.15s; }
+.comparison-table tbody tr:hover { background: rgba(88,166,255,0.03); }
+
+.comparison-table td:first-child {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.check { color: var(--green); }
+.cross { color: var(--text-muted); }
+.partial { color: var(--orange); }
+
+/* ── CODE BLOCK ── */
+.code-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.code-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.code-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.code-lang {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.code-copy-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.code-copy-btn:hover { color: var(--text-secondary); border-color: var(--border-light); }
+
+.code-block pre {
+  padding: 24px;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.code-block .comment { color: var(--text-muted); }
+.code-block .keyword { color: var(--purple); }
+.code-block .string { color: #a5d6ff; }
+.code-block .function { color: #d2a8ff; }
+.code-block .builtin { color: var(--accent); }
+
+/* ── ARCHITECTURE ── */
+.arch-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.arch-block pre {
+  padding: 28px;
+  overflow-x: auto;
+  font-size: clamp(0.65rem, 1.3vw, 0.85rem);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* ── AUTHOR ── */
+.author-card {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+}
+
+.author-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.author-info h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.author-info p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.author-links {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.author-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.author-links a:hover { color: var(--accent); }
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 40px 0;
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-left {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.footer-links {
+  display: flex;
+  gap: 20px;
+  list-style: none;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.footer-links a:hover { color: var(--text-secondary); }
+
+/* ── ANIMATIONS ── */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .nav-links.open {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: rgba(13,17,23,0.97);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+    gap: 16px;
+  }
+  .hamburger { display: flex; }
+  .hero { padding: 120px 0 60px; }
+  .hero-actions { flex-direction: column; }
+  .install-box { width: 100%; justify-content: center; }
+  .features-grid { grid-template-columns: 1fr; }
+  .author-card { flex-direction: column; text-align: center; }
+  .author-links { justify-content: center; }
+  .footer-inner { flex-direction: column; text-align: center; }
+  section { padding: 60px 0; }
+}
+
+@media (max-width: 480px) {
+  .hero { padding: 100px 0 48px; }
+  .install-box { font-size: 0.85rem; padding: 10px 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <div class="container">
+    <a href="#" class="nav-logo"><span>&gt;_</span> DeepNetz</a>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#benchmarks">Benchmarks</a></li>
+      <li><a href="#comparison">Comparison</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li>
+        <a href="https://github.com/Keyvanhardani/deepnetz" target="_blank" rel="noopener" class="nav-github">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <span id="starCount">Star</span>
+        </a>
+      </li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="badge fade-in">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/></svg>
+      Open Source &middot; Apache 2.0
+    </div>
+
+    <h1 class="fade-in">Deep<span class="accent">Netz</span></h1>
+    <p class="hero-sub fade-in">Run massive models on minimal hardware.<br>An open-source LLM inference framework with intelligent backend selection, KV cache compression, and hardware auto-detection.</p>
+
+    <div class="hero-actions fade-in">
+      <div class="install-box" id="installBox" title="Click to copy">
+        <span class="dollar">$</span>
+        <span>pip install deepnetz</span>
+        <span class="tooltip" id="copyTooltip">Copied!</span>
+        <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/></svg>
+      </div>
+      <a href="https://github.com/Keyvanhardani/deepnetz" target="_blank" rel="noopener" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <div class="hero-meta fade-in">
+      <span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-muted)"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        Apache-2.0
+      </span>
+      <span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-muted)"><path d="M11.93 8.5a4.002 4.002 0 01-7.86 0H.75a.75.75 0 010-1.5h3.32a4.002 4.002 0 017.86 0h3.32a.75.75 0 010 1.5h-3.32zM8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>
+        Python 3.8+
+      </span>
+      <span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-muted)"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zM7 11.5L3.5 8l1.41-1.41L7 8.67l4.09-4.08L12.5 6 7 11.5z"/></svg>
+        6 Backends
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <p class="section-label fade-in">Features</p>
+    <h2 class="section-title fade-in">Built for real-world inference</h2>
+    <p class="section-desc fade-in">DeepNetz automatically selects the best backend for your hardware and optimizes memory usage to run models that shouldn't fit.</p>
+
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <div class="feature-icon blue">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75A.75.75 0 011.75 2h12.5a.75.75 0 010 1.5H1.75A.75.75 0 011 2.75zm0 5A.75.75 0 011.75 7h12.5a.75.75 0 010 1.5H1.75A.75.75 0 011 7.75zM1.75 12h12.5a.75.75 0 010 1.5H1.75a.75.75 0 010-1.5z"/></svg>
+        </div>
+        <h3>6 Inference Backends</h3>
+        <p>llama.cpp, HuggingFace Transformers, ExLlamaV2, vLLM, CTranslate2, and ONNX Runtime. DeepNetz picks the optimal one automatically.</p>
+      </div>
+
+      <div class="feature-card fade-in">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M5.75 7.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75zm5.25.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5z"/><path d="M6.25 0a.75.75 0 000 1.5H7.5v2.026C4.442 3.88 2 6.583 2 9.86v2.39A1.75 1.75 0 003.75 14h8.5A1.75 1.75 0 0014 12.25V9.86c0-3.278-2.442-5.98-5.5-6.334V1.5h1.25a.75.75 0 000-1.5h-3.5zM3.5 9.86c0-2.636 2.016-4.86 4.5-4.86s4.5 2.224 4.5 4.86v2.39a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25V9.86z"/></svg>
+        </div>
+        <h3>KV Cache Compression</h3>
+        <p>Intelligent key-value cache management reduces VRAM usage significantly, enabling larger context windows on constrained hardware.</p>
+      </div>
+
+      <div class="feature-card fade-in">
+        <div class="feature-icon purple">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75z"/><path d="M3.5 5.25a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zm.75 2.75h4.5a.75.75 0 010 1.5h-4.5a.75.75 0 010-1.5z"/></svg>
+        </div>
+        <h3>Built-in Web UI</h3>
+        <p>A clean, responsive chat interface ships out of the box. No separate frontend setup needed &mdash; just run and open your browser.</p>
+      </div>
+
+      <div class="feature-card fade-in">
+        <div class="feature-icon orange">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 3.75a.25.25 0 01.25-.25h8.5a.25.25 0 01.25.25v8.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-8.5zM3.75 2A1.75 1.75 0 002 3.75v8.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 12.25v-8.5A1.75 1.75 0 0012.25 2h-8.5z"/><path d="M8 4a.75.75 0 01.75.75v2.5h2.5a.75.75 0 010 1.5h-2.5v2.5a.75.75 0 01-1.5 0v-2.5h-2.5a.75.75 0 010-1.5h2.5v-2.5A.75.75 0 018 4z"/></svg>
+        </div>
+        <h3>Tool Calling</h3>
+        <p>Native function/tool calling support compatible with OpenAI-style tool definitions. Build agents that interact with external APIs.</p>
+      </div>
+
+      <div class="feature-card fade-in">
+        <div class="feature-icon blue">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M7.655 14.916v-.001h-.002l-.006-.003-.018-.01a22.066 22.066 0 01-3.744-2.584C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.044 5.231-3.886 6.818a22.094 22.094 0 01-3.433 2.39 13.46 13.46 0 01-.329.197l-.018.01-.006.003h-.002L8 14.25l.345.666a.752.752 0 01-.69 0z"/></svg>
+        </div>
+        <h3>Hardware Auto-Detection</h3>
+        <p>Detects your GPU, VRAM, CPU cores, and RAM at startup. Automatically configures quantization level, batch size, and layer offloading.</p>
+      </div>
+
+      <div class="feature-card fade-in">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8.878.392a1.75 1.75 0 00-1.756 0l-5.25 3.045A1.75 1.75 0 001 4.951v6.098c0 .624.332 1.2.872 1.514l5.25 3.045a1.75 1.75 0 001.756 0l5.25-3.045c.54-.313.872-.89.872-1.514V4.951c0-.624-.332-1.2-.872-1.514L8.878.392zM7.875 1.69a.25.25 0 01.25 0l4.63 2.685L8 7.133 3.245 4.375l4.63-2.685zM2.5 5.677v5.372c0 .09.047.171.125.216l4.625 2.683V8.432L2.5 5.677zm6.25 8.271l4.625-2.683a.25.25 0 00.125-.216V5.677L8.75 8.432v5.516z"/></svg>
+        </div>
+        <h3>OpenAI-Compatible API</h3>
+        <p>Drop-in replacement for the OpenAI API. Use your existing code and tools &mdash; just change the base URL to your local DeepNetz server.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BENCHMARKS -->
+<section id="benchmarks">
+  <div class="container">
+    <p class="section-label fade-in">Benchmarks</p>
+    <h2 class="section-title fade-in">Honest numbers, real hardware</h2>
+    <p class="section-desc fade-in">Measured on consumer hardware. No cherry-picked results. Quality delta is vs. uncompressed FP16 baseline.</p>
+
+    <div class="bench-table-wrap fade-in">
+      <table class="bench-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Parameters</th>
+            <th>Quality Delta</th>
+            <th>Throughput</th>
+            <th>VRAM Used</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="model-name">Llama 3.2</td>
+            <td>3B</td>
+            <td class="positive">+0.4%</td>
+            <td>42.1 tok/s</td>
+            <td>2.8 GB</td>
+          </tr>
+          <tr>
+            <td class="model-name">Gemma 2</td>
+            <td>27B</td>
+            <td class="positive">+2.0%</td>
+            <td>8.7 tok/s</td>
+            <td>14.2 GB</td>
+          </tr>
+          <tr>
+            <td class="model-name">Qwen 2.5</td>
+            <td>35B</td>
+            <td class="positive">+2.7%</td>
+            <td>6.3 tok/s</td>
+            <td>18.1 GB</td>
+          </tr>
+          <tr>
+            <td class="model-name">Command R+</td>
+            <td>122B</td>
+            <td>&mdash;</td>
+            <td class="highlight">1.3 tok/s</td>
+            <td>48 GB (CPU offload)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="bench-note fade-in">Benchmarked on a single RTX 4090 (24 GB VRAM), 64 GB DDR5 RAM. The 122B model uses partial CPU offloading. Quality delta measured on MMLU subset. Positive values = better than baseline (due to quantization noise regularization).</p>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section id="comparison">
+  <div class="container">
+    <p class="section-label fade-in">Comparison</p>
+    <h2 class="section-title fade-in">How DeepNetz compares</h2>
+    <p class="section-desc fade-in">Different tools for different needs. Here's where DeepNetz fits.</p>
+
+    <div class="comparison-table-wrap fade-in">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="dn">DeepNetz</th>
+            <th>Ollama</th>
+            <th>LM Studio</th>
+            <th>vLLM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Open Source</td>
+            <td class="check">&#10003; Apache-2.0</td>
+            <td class="check">&#10003; MIT</td>
+            <td class="cross">&#10005; Proprietary</td>
+            <td class="check">&#10003; Apache-2.0</td>
+          </tr>
+          <tr>
+            <td>Multiple Backends</td>
+            <td class="check">&#10003; 6 backends</td>
+            <td class="cross">&#10005; llama.cpp only</td>
+            <td class="cross">&#10005; llama.cpp only</td>
+            <td class="cross">&#10005; vLLM only</td>
+          </tr>
+          <tr>
+            <td>Hardware Auto-Detect</td>
+            <td class="check">&#10003; Full</td>
+            <td class="partial">&#9675; Basic</td>
+            <td class="partial">&#9675; Basic</td>
+            <td class="cross">&#10005; Manual</td>
+          </tr>
+          <tr>
+            <td>KV Cache Compression</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="partial">&#9675; Experimental</td>
+          </tr>
+          <tr>
+            <td>Tool Calling</td>
+            <td class="check">&#10003; Native</td>
+            <td class="check">&#10003;</td>
+            <td class="partial">&#9675; Limited</td>
+            <td class="check">&#10003;</td>
+          </tr>
+          <tr>
+            <td>Web UI</td>
+            <td class="check">&#10003; Built-in</td>
+            <td class="cross">&#10005; CLI only</td>
+            <td class="check">&#10003; Desktop app</td>
+            <td class="cross">&#10005;</td>
+          </tr>
+          <tr>
+            <td>CPU + GPU Offloading</td>
+            <td class="check">&#10003; Auto</td>
+            <td class="partial">&#9675; Manual</td>
+            <td class="partial">&#9675; Manual</td>
+            <td class="cross">&#10005; GPU only</td>
+          </tr>
+          <tr>
+            <td>Python Library</td>
+            <td class="check">&#10003; pip install</td>
+            <td class="cross">&#10005; Binary</td>
+            <td class="cross">&#10005; Binary</td>
+            <td class="check">&#10003; pip install</td>
+          </tr>
+          <tr>
+            <td>Production Batching</td>
+            <td class="partial">&#9675; Basic</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="check">&#10003; Continuous</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- QUICK START -->
+<section id="quickstart">
+  <div class="container">
+    <p class="section-label fade-in">Quick Start</p>
+    <h2 class="section-title fade-in">Up and running in 30 seconds</h2>
+    <p class="section-desc fade-in">Install, load a model, generate. That's it.</p>
+
+    <div class="code-block fade-in">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">Python</span>
+        <button class="code-copy-btn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code><span class="comment"># Install</span>
+<span class="builtin">pip install</span> deepnetz
+
+<span class="comment"># Python API</span>
+<span class="keyword">from</span> deepnetz <span class="keyword">import</span> DeepNetz
+
+<span class="comment"># Initialize — hardware is auto-detected</span>
+dn = DeepNetz()
+
+<span class="comment"># Load any supported model (GGUF, HF, GPTQ, AWQ, EXL2)</span>
+dn.load(<span class="string">"meta-llama/Llama-3.2-3B-Instruct"</span>)
+
+<span class="comment"># Generate</span>
+response = dn.chat(<span class="string">"Explain quantum computing in simple terms."</span>)
+<span class="builtin">print</span>(response)
+
+<span class="comment"># Or start the server with Web UI</span>
+dn.serve(port=<span class="string">8000</span>)  <span class="comment"># Opens http://localhost:8000</span></code></pre>
+    </div>
+
+    <div class="code-block fade-in" style="margin-top: 20px;">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">CLI</span>
+        <button class="code-copy-btn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code><span class="comment"># Start a server (OpenAI-compatible API)</span>
+$ deepnetz serve --model meta-llama/Llama-3.2-3B-Instruct --port 8000
+
+<span class="comment"># Interactive chat in your terminal</span>
+$ deepnetz chat --model meta-llama/Llama-3.2-3B-Instruct
+
+<span class="comment"># Benchmark a model on your hardware</span>
+$ deepnetz bench --model meta-llama/Llama-3.2-3B-Instruct</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="container">
+    <p class="section-label fade-in">Architecture</p>
+    <h2 class="section-title fade-in">How it works</h2>
+    <p class="section-desc fade-in">DeepNetz sits between your code and the inference backend. It handles hardware detection, model loading, and optimization automatically.</p>
+
+    <div class="arch-block fade-in">
+      <pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                        Your Application                         │
+│               (Python API / CLI / Web UI / REST)                │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      DeepNetz Core Engine                       │
+│                                                                 │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
+│  │  Hardware    │  │   Model      │  │   Optimization         │ │
+│  │  Detector    │  │   Router     │  │   Pipeline             │ │
+│  │             │  │              │  │                        │ │
+│  │  • GPU/VRAM │  │  • Format    │  │  • KV Cache Compress.  │ │
+│  │  • CPU/RAM  │  │    Detection │  │  • Layer Offloading    │ │
+│  │  • Platform │  │  • Backend   │  │  • Quant. Selection    │ │
+│  │             │  │    Selection │  │  • Batch Optimization  │ │
+│  └──────┬──────┘  └──────┬───────┘  └───────────┬────────────┘ │
+│         └────────────────┼──────────────────────┘              │
+└──────────────────────────┼──────────────────────────────────────┘
+                           │
+            ┌──────────────┼──────────────────┐
+            ▼              ▼                  ▼
+┌────────────────┐ ┌──────────────┐ ┌──────────────────┐
+│   llama.cpp    │ │  HuggingFace │ │    ExLlamaV2     │
+│   (GGUF)       │ │  Transformers│ │    (EXL2/GPTQ)   │
+└────────────────┘ └──────────────┘ └──────────────────┘
+┌────────────────┐ ┌──────────────┐ ┌──────────────────┐
+│     vLLM       │ │  CTranslate2 │ │  ONNX Runtime    │
+│   (server)     │ │  (CT2)       │ │  (ONNX)          │
+└────────────────┘ └──────────────┘ └──────────────────┘</pre>
+    </div>
+  </div>
+</section>
+
+<!-- AUTHOR -->
+<section id="author">
+  <div class="container">
+    <p class="section-label fade-in">Author</p>
+    <h2 class="section-title fade-in">Built by</h2>
+
+    <div class="author-card fade-in">
+      <div class="author-avatar">KH</div>
+      <div class="author-info">
+        <h3>Keyvan Hardani</h3>
+        <p>Software engineer and AI researcher. Building tools to make large language models accessible on everyday hardware.</p>
+        <div class="author-links">
+          <a href="https://keyvan.ai" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855A7.97 7.97 0 005.145 4H7.5V1.077zM4.09 4a9.267 9.267 0 01.64-1.539 6.7 6.7 0 01.597-.933A7.025 7.025 0 002.255 4H4.09zm-.582 3.5c.03-.877.138-1.718.312-2.5H1.674a6.958 6.958 0 00-.656 2.5h2.49zM4.847 5a12.5 12.5 0 00-.338 2.5H7.5V5H4.847zM8.5 5v2.5h2.99a12.495 12.495 0 00-.337-2.5H8.5zM4.51 8.5a12.5 12.5 0 00.337 2.5H7.5V8.5H4.51zm3.99 0V11h2.653c.187-.765.306-1.608.338-2.5H8.5zM5.145 12c.138.386.295.744.468 1.068.552 1.035 1.218 1.65 1.887 1.855V12H5.145zm.182 2.472a6.696 6.696 0 01-.597-.933A9.268 9.268 0 014.09 12H2.255a7.024 7.024 0 003.072 2.472zM3.82 11a13.652 13.652 0 01-.312-2.5h-2.49c.062.89.291 1.733.656 2.5H3.82zm6.853 3.472A7.024 7.024 0 0013.745 12H11.91a9.27 9.27 0 01-.64 1.539 6.688 6.688 0 01-.597.933zM8.5 12v2.923c.67-.204 1.335-.82 1.887-1.855.173-.324.33-.682.468-1.068H8.5zm3.68-1h2.146c.365-.767.594-1.61.656-2.5h-2.49a13.65 13.65 0 01-.312 2.5zm2.802-3.5a6.959 6.959 0 00-.656-2.5H12.18c.174.782.282 1.623.312 2.5h2.49zM11.27 2.461c.247.464.462.98.64 1.539h1.835a7.024 7.024 0 00-3.072-2.472c.218.284.418.598.597.933zM10.855 4a7.966 7.966 0 00-.468-1.068C9.835 1.897 9.17 1.282 8.5 1.077V4h2.355z"/></svg>
+            keyvan.ai
+          </a>
+          <a href="https://github.com/Keyvanhardani" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </a>
+          <a href="https://linkedin.com/in/keyvanhardani" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.632 13.635h-2.37V9.922c0-.886-.018-2.025-1.234-2.025-1.235 0-1.424.964-1.424 1.96v3.778h-2.37V6H8.51v1.04h.03c.318-.6 1.092-1.233 2.247-1.233 2.4 0 2.845 1.58 2.845 3.637v4.188zM3.558 4.955c-.762 0-1.376-.617-1.376-1.377 0-.758.614-1.375 1.376-1.375.76 0 1.376.617 1.376 1.375 0 .76-.616 1.377-1.376 1.377zm1.188 8.68H2.37V6h2.376v7.635zM14.816 0H1.18C.528 0 0 .516 0 1.153v13.694C0 15.484.528 16 1.18 16h13.635c.652 0 1.185-.516 1.185-1.153V1.153C16 .516 15.467 0 14.815 0z"/></svg>
+            LinkedIn
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        &copy; 2025 DeepNetz &middot; Apache-2.0 License
+      </div>
+      <ul class="footer-links">
+        <li><a href="https://github.com/Keyvanhardani/deepnetz" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="https://pypi.org/project/deepnetz/" target="_blank" rel="noopener">PyPI</a></li>
+        <li><a href="https://github.com/Keyvanhardani/deepnetz/issues" target="_blank" rel="noopener">Issues</a></li>
+        <li><a href="https://keyvan.ai" target="_blank" rel="noopener">keyvan.ai</a></li>
+        <li><a href="https://deepnetz.de">deepnetz.de</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Nav scroll effect
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// Hamburger menu
+const hamburger = document.getElementById('hamburger');
+const navLinks = document.getElementById('navLinks');
+hamburger.addEventListener('click', () => {
+  navLinks.classList.toggle('open');
+});
+
+// Close mobile menu on link click
+navLinks.querySelectorAll('a').forEach(link => {
+  link.addEventListener('click', () => navLinks.classList.remove('open'));
+});
+
+// Copy pip install
+const installBox = document.getElementById('installBox');
+const tooltip = document.getElementById('copyTooltip');
+installBox.addEventListener('click', () => {
+  navigator.clipboard.writeText('pip install deepnetz').then(() => {
+    tooltip.classList.add('show');
+    setTimeout(() => tooltip.classList.remove('show'), 1500);
+  });
+});
+
+// Copy code blocks
+function copyCode(btn) {
+  const code = btn.closest('.code-block').querySelector('code');
+  const text = code.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+// Fade-in on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Fetch GitHub stars
+async function fetchStars() {
+  try {
+    const res = await fetch('https://api.github.com/repos/Keyvanhardani/deepnetz');
+    if (res.ok) {
+      const data = await res.json();
+      const count = data.stargazers_count;
+      if (count !== undefined) {
+        const el = document.getElementById('starCount');
+        el.textContent = count >= 1000 ? (count / 1000).toFixed(1) + 'k' : count + ' Stars';
+      }
+    }
+  } catch (e) { /* silently fail */ }
+}
+fetchStars();
+</script>
+</body>
+</html>

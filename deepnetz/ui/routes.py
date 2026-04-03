@@ -45,3 +45,7 @@ def mount_ui(app):
     @app.get("/models", response_class=HTMLResponse)
     async def models_page():
         return _render("models.html")
+
+    @app.get("/landing", response_class=HTMLResponse)
+    async def landing_page():
+        return _render("landing.html")
