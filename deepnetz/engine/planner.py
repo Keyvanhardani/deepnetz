@@ -82,12 +82,12 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
     kv_total_f16_mb = (kv_bytes_per_token_per_layer_f16 * model.n_layers *
                        target_context) / (1024 * 1024)
 
-    # Try compression levels
+    # Try compression levels (standard GGML types — works with any llama-cpp-python)
     kv_configs = [
-        ("f16", "f16", 1.0),
-        ("turbo4_0", "turbo4_0", 1.0 / 3.6),
-        ("turbo3_0", "turbo3_0", 1.0 / 4.6),
-        ("turbo2_0", "turbo2_0", 1.0 / 6.4),
+        ("f16", "f16", 1.0),       # No compression
+        ("q8_0", "q8_0", 1.0 / 1.9),  # 1.9x compression, minimal quality loss
+        ("q4_0", "q4_0", 1.0 / 3.6),  # 3.6x compression, good for large models
+        ("q4_1", "q4_1", 1.0 / 3.4),  # Slightly better quality than q4_0
     ]
 
     best_plan = None
@@ -150,17 +150,17 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
             break
         elif best_plan is None:
             best_plan = plan
-            if kv_k == "turbo4_0":
-                break  # turbo4 is good enough, don't go lower
+            if kv_k == "q8_0":
+                break  # q8_0 is good enough for most cases
 
     if best_plan is None:
         # Nothing fits — use most aggressive compression
         best_plan = InferencePlan(
             n_gpu_layers=0,
             n_cpu_layers=model.n_layers,
-            kv_type_k="turbo2_0",
-            kv_type_v="turbo2_0",
-            kv_cache_mb=kv_total_f16_mb / 6.4,
+            kv_type_k="q4_0",
+            kv_type_v="q4_0",
+            kv_cache_mb=kv_total_f16_mb / 3.6,
             max_context=min(target_context, 2048),
             use_eviction=True,
             eviction_strategy="attention_sink",

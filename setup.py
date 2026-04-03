@@ -56,6 +56,7 @@ CYTHON_MODULES = [
     "deepnetz/registry/store.py",
     "deepnetz/registry/client.py",
     "deepnetz/registry/config.py",
+    "deepnetz/registry/server.py",
 ]
 
 # __init__.py files stay as Python (minimal, just imports)

@@ -6,11 +6,33 @@ from typing import List, Optional
 from deepnetz.backends.base import BackendAdapter, BackendInfo
 
 
-def discover_backends() -> List[BackendAdapter]:
-    """Probe all known backends and return available ones."""
-    backends = []
+_cached_backends = None
 
-    # Native (llama-cpp-python)
+
+def discover_backends(use_cache: bool = True) -> List[BackendAdapter]:
+    """Probe all known backends and return available ones.
+    Results are cached after first call for speed."""
+    global _cached_backends
+    if use_cache and _cached_backends is not None:
+        return _cached_backends
+
+    backends = []
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def _probe(cls_path):
+        try:
+            module_path, class_name = cls_path.rsplit(".", 1)
+            import importlib
+            module = importlib.import_module(module_path)
+            cls = getattr(module, class_name)
+            b = cls()
+            if b.detect().available:
+                return b
+        except Exception:
+            pass
+        return None
+
+    # Native first (no network, instant) — always check synchronously
     try:
         from deepnetz.backends.native import NativeBackend
         b = NativeBackend()
@@ -19,42 +41,25 @@ def discover_backends() -> List[BackendAdapter]:
     except Exception:
         pass
 
-    # Ollama
-    try:
-        from deepnetz.backends.ollama import OllamaBackend
-        b = OllamaBackend()
-        if b.detect().available:
-            backends.append(b)
-    except Exception:
-        pass
+    # Network backends in parallel (Ollama, vLLM, LMStudio, HF)
+    network_backends = [
+        "deepnetz.backends.ollama.OllamaBackend",
+        "deepnetz.backends.vllm.VLLMBackend",
+        "deepnetz.backends.lmstudio.LMStudioBackend",
+        "deepnetz.backends.huggingface.HuggingFaceBackend",
+    ]
 
-    # vLLM
-    try:
-        from deepnetz.backends.vllm import VLLMBackend
-        b = VLLMBackend()
-        if b.detect().available:
-            backends.append(b)
-    except Exception:
-        pass
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(_probe, cls) for cls in network_backends]
+        for future in futures:
+            try:
+                result = future.result(timeout=3)
+                if result:
+                    backends.append(result)
+            except Exception:
+                pass
 
-    # LM Studio
-    try:
-        from deepnetz.backends.lmstudio import LMStudioBackend
-        b = LMStudioBackend()
-        if b.detect().available:
-            backends.append(b)
-    except Exception:
-        pass
-
-    # HuggingFace
-    try:
-        from deepnetz.backends.huggingface import HuggingFaceBackend
-        b = HuggingFaceBackend()
-        if b.detect().available:
-            backends.append(b)
-    except Exception:
-        pass
-
+    _cached_backends = backends
     return backends
 
 

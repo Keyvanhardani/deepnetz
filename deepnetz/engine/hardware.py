@@ -33,9 +33,26 @@ class HardwareProfile:
 def detect_gpus() -> List[GPUInfo]:
     """Detect NVIDIA GPUs via nvidia-smi."""
     gpus = []
+
+    # Find nvidia-smi (may not be in PATH, especially in WSL2)
+    nvidia_smi = "nvidia-smi"
+    for candidate in [
+        "nvidia-smi",
+        "/usr/lib/wsl/lib/nvidia-smi",  # WSL2
+        "/usr/local/cuda/bin/nvidia-smi",
+        "/usr/bin/nvidia-smi",
+    ]:
+        try:
+            r = subprocess.run([candidate, "--version"], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                nvidia_smi = candidate
+                break
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,name,memory.total,compute_cap",
+            [nvidia_smi, "--query-gpu=index,name,memory.total,compute_cap",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=10
         )
