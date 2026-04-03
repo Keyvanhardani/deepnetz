@@ -4,9 +4,13 @@
 
 ```bash
 pip install deepnetz
-deepnetz run model.gguf --cpu
-deepnetz run model.gguf --gpu 8GB
-deepnetz serve model.gguf --port 8080
+
+deepnetz run model.gguf                         # auto-detect hardware
+deepnetz run model.gguf --cpu                    # CPU-only
+deepnetz run model.gguf --gpu 8GB                # GPU with budget
+deepnetz run ollama://qwen3.5:35b                # load from Ollama
+deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF  # load from HuggingFace
+deepnetz serve model.gguf --port 8080            # OpenAI-compatible API
 ```
 
 DeepNetz combines cutting-edge research into one framework that makes large language models run on consumer hardware — no A100 required.
@@ -20,13 +24,20 @@ pip install deepnetz
 # Check your hardware
 deepnetz hardware
 
-# Run a model (auto-detects GPU/CPU, picks optimal config)
-deepnetz run path/to/model.gguf
+# Local GGUF file
+deepnetz run ./model.gguf
 
-# Force CPU-only
+# Load from Ollama (reads from ~/.ollama/models/)
+deepnetz run ollama://qwen3.5:35b
+
+# Load from HuggingFace (auto-downloads)
+deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF
+
+# Load from LM Studio cache
+deepnetz run lmstudio://qwen3.5-35b
+
+# CPU-only / GPU with budget
 deepnetz run model.gguf --cpu
-
-# Set GPU budget
 deepnetz run model.gguf --gpu 8GB --context 32k
 
 # Interactive chat

@@ -60,7 +60,7 @@ def get_extensions():
             "wraparound": False,
         },
         # Don't include .py source in distribution
-        nthreads=os.cpu_count() or 4,
+        nthreads=1,  # avoid macOS multiprocessing issues in CI
     )
 
 
