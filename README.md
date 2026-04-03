@@ -207,6 +207,17 @@ deepnetz/
 
 **Keyvan Hardani** — [keyvan.ai](https://keyvan.ai) | [deepnetz.com](https://deepnetz.com) | [GitHub](https://github.com/Keyvanhardani) | [LinkedIn](https://linkedin.com/in/keyvanhardani)
 
+## Contributing
+
+PRs welcome! See [open issues](https://github.com/Keyvanhardani/deepnetz/issues).
+
+```bash
+git clone https://github.com/Keyvanhardani/deepnetz.git
+cd deepnetz
+pip install -e ".[server]"
+pytest tests/
+```
+
 ## License
 
-Proprietary. Distributed as compiled binaries via PyPI.
+MIT — use it, fork it, build on it.

@@ -109,7 +109,7 @@ if __name__ == "__main__":
         "Homepage": "https://deepnetz.com",
         "Repository": "https://github.com/Keyvanhardani/deepnetz",
     },
-    license="Proprietary",
+    license="MIT",
     packages=find_packages(),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": CleanSourceBuildExt} if USE_CYTHON else {},
