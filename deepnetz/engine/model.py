@@ -67,6 +67,14 @@ class Model:
             self.hw.total_vram_mb = 0
             self.hw.has_cuda = False
 
+        # Resolve model path (supports ollama://, hf://, lmstudio://, URLs, local)
+        from deepnetz.engine.resolver import resolve_model
+        try:
+            self.model_path = resolve_model(model_path)
+            model_path = self.model_path
+        except FileNotFoundError:
+            pass  # Will fail at gguf_to_model_spec below
+
         # Read model specs from GGUF
         if os.path.exists(model_path):
             self.spec = gguf_to_model_spec(model_path)
@@ -74,8 +82,13 @@ class Model:
                 print_model_info(self.spec)
         else:
             raise FileNotFoundError(
-                f"Model not found: {model_path}\n"
-                f"Use 'deepnetz download <model>' to fetch from HuggingFace."
+                f"Model not found: {model_path}\n\n"
+                f"Supported sources:\n"
+                f"  deepnetz run ./model.gguf\n"
+                f"  deepnetz run ollama://qwen3.5:35b\n"
+                f"  deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF\n"
+                f"  deepnetz run lmstudio://model-name\n"
+                f"  deepnetz download Qwen3.5-35B\n"
             )
 
         # Plan inference
