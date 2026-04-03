@@ -119,10 +119,7 @@ if __name__ == "__main__":
     packages=find_packages(),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": CleanSourceBuildExt} if USE_CYTHON else {},
-    exclude_package_data={"": ["*.py"], "deepnetz": ["cli.py", "server.py"],
-                          "deepnetz.engine": ["model.py", "backend.py", "hardware.py",
-                                               "planner.py", "gguf_reader.py", "downloader.py",
-                                               "resolver.py"]},
+    exclude_package_data={"": ["*.so", "*.pyd", "*.c"]},
     python_requires=">=3.9",
     install_requires=[
         "llama-cpp-python>=0.3.0",
@@ -136,9 +133,8 @@ if __name__ == "__main__":
             "deepnetz=deepnetz.cli:main",
         ],
     },
-    # Don't include .py source files for compiled modules
     package_data={
-        "deepnetz": ["*.so", "*.pyd"],
+        "deepnetz": ["ui/static/*", "ui/templates/*"],
     },
     classifiers=[
         "Programming Language :: Python :: 3",
