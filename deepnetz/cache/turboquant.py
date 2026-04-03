@@ -68,9 +68,9 @@ def recommend_kv_config(model_params_b: float,
     - turbo2_0: aggressive, for extreme memory constraints
     """
     # Estimate KV cache size at f16
-    # Rough: 2 * n_kv_heads * head_dim * n_layers * context * 2 bytes
-    # Simplified: ~0.5 MB per 1B params per 1K context tokens
-    kv_f16_mb = model_params_b * 0.5 * (target_context / 1024)
+    # More accurate: ~2 MB per 1B params per 1K context tokens
+    # (accounts for GQA ratio, typical head_dim=128)
+    kv_f16_mb = model_params_b * 2.0 * (target_context / 1024)
 
     if kv_f16_mb < available_vram_mb * 0.3:
         # KV cache fits easily, no compression needed

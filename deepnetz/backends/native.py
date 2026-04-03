@@ -20,6 +20,7 @@ class NativeBackend(BackendAdapter):
         self._llm = None
         self._model_path = ""
         self._config = {}
+        self._evictor = None
 
     @property
     def name(self) -> str:
@@ -98,13 +99,37 @@ class NativeBackend(BackendAdapter):
             "n_threads": n_threads, "kv_type_k": kv_type_k,
         }
 
-        self._llm = Llama(
-            model_path=model_ref,
-            n_ctx=n_ctx,
-            n_gpu_layers=n_gpu_layers,
-            n_threads=n_threads,
-            verbose=False,
-        )
+        # Map KV type names to GGML type IDs
+        type_map = {"f16": 1, "f32": 0, "q8_0": 8, "q4_0": 2, "q4_1": 3,
+                    "q5_0": 6, "q5_1": 7, "turbo4_0": 41, "turbo3_0": 42, "turbo2_0": 43}
+        type_k_id = type_map.get(kv_type_k, 1)
+        type_v_id = type_map.get(kv_type_v, 1)
+
+        # Try to pass type_k/type_v (requires llama-cpp-python with support)
+        llama_kwargs = {
+            "model_path": model_ref,
+            "n_ctx": n_ctx,
+            "n_gpu_layers": n_gpu_layers,
+            "n_threads": n_threads,
+            "verbose": False,
+        }
+        try:
+            self._llm = Llama(type_k=type_k_id, type_v=type_v_id, **llama_kwargs)
+        except TypeError:
+            # Older llama-cpp-python without type_k/type_v support
+            self._llm = Llama(**llama_kwargs)
+
+        # Initialize eviction if context is large
+        if n_ctx >= 2048:
+            try:
+                from deepnetz.cache.eviction import AttentionSinkEvictor, EvictionConfig
+                self._evictor = AttentionSinkEvictor(EvictionConfig(
+                    max_cache_tokens=n_ctx,
+                    sink_tokens=4,
+                    window_size=min(512, n_ctx // 4),
+                ))
+            except ImportError:
+                pass
 
     def chat(self, messages: List[Dict[str, str]],
              config: Optional[GenerationConfig] = None) -> str:

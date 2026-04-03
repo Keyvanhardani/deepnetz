@@ -18,11 +18,11 @@ deepnetz serve model.gguf --port 8080            # OpenAI-compatible API
 
 One framework. 6 backends. Any model. Any hardware.
 
-| You have | Without DeepNetz | With DeepNetz |
-|----------|-----------------|---------------|
-| RTX 4060 8GB + 32GB RAM | 8B model, 4K context | 122B model, 32K context |
-| 32GB RAM, no GPU | 7B model, 4K context | 35B model, 8K context |
-| RTX 3090 24GB + 64GB RAM | 70B model, 8K context | 122B model, 128K context |
+| You have | Typical setup | With DeepNetz optimization |
+|----------|--------------|---------------------------|
+| RTX 4060 8GB + 32GB RAM | 35B model via Ollama | Same model, 3.6x less KV cache, longer context |
+| 32GB RAM, no GPU | 7B model, slow | Auto-optimized CPU inference + KV compression |
+| RTX 3090 24GB + 64GB RAM | 70B model | Same model, optimized layer split + cache |
 
 ## Quick start
 
