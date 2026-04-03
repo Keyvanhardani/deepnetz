@@ -6,3 +6,5 @@ build/
 .cache/
 *.gguf
 *.c
+*.so
+*.pyd
