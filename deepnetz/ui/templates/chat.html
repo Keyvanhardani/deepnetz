@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepNetz Chat</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav>
+    <span class="logo">DeepNetz</span>
+    <a href="/">Dashboard</a>
+    <a href="/chat" class="active">Chat</a>
+    <a href="/models">Models</a>
+  </nav>
+
+  <div class="chat-container">
+    <div class="chat-messages" id="messages"></div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="input" rows="2" placeholder="Type a message... (Enter to send, Shift+Enter for newline)"></textarea>
+      <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>

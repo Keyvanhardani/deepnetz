@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepNetz Models</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav>
+    <span class="logo">DeepNetz</span>
+    <a href="/">Dashboard</a>
+    <a href="/chat">Chat</a>
+    <a href="/models" class="active">Models</a>
+  </nav>
+
+  <div class="container">
+    <div class="card" style="margin-bottom: 16px;">
+      <h3>Available Models</h3>
+      <table>
+        <thead><tr><th>Model</th><th>Backend</th><th>Size</th><th>Action</th></tr></thead>
+        <tbody id="model-list">
+          <tr><td colspan="4" style="color: var(--text-dim)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function loadModels() {
+      try {
+        const resp = await fetch('/v1/models');
+        const data = await resp.json();
+        const el = document.getElementById('model-list');
+        if (data.data && data.data.length > 0) {
+          el.innerHTML = data.data.map(m => {
+            const size = m.size_mb ? `${(m.size_mb/1024).toFixed(1)} GB` : '—';
+            return `<tr><td>${m.id}</td><td><span class="badge badge-active">${m.backend || 'unknown'}</span></td><td>${size}</td><td><button class="btn" onclick="loadModel('${m.id}')">Load</button></td></tr>`;
+          }).join('');
+        } else {
+          el.innerHTML = '<tr><td colspan="4">No models found</td></tr>';
+        }
+      } catch (e) {
+        document.getElementById('model-list').innerHTML = `<tr><td colspan="4">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    async function loadModel(name) {
+      alert('Model loading: ' + name + '\nThis feature is coming in v0.8');
+    }
+
+    loadModels();
+  </script>
+</body>
+</html>

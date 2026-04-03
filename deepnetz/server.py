@@ -97,6 +97,10 @@ def create_app(model_path: str,
         return {"status": "ok", "backend": model.backend.name,
                 "model": model.model_ref}
 
+    # Mount Web UI
+    from deepnetz.ui.routes import mount_ui
+    mount_ui(app)
+
     @app.websocket("/ws/monitor")
     async def ws_monitor(ws: WebSocket):
         await ws.accept()

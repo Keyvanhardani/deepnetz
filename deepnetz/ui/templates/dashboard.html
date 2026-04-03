@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepNetz Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <nav>
+    <span class="logo">DeepNetz</span>
+    <a href="/" class="active">Dashboard</a>
+    <a href="/chat">Chat</a>
+    <a href="/models">Models</a>
+  </nav>
+
+  <div class="container">
+    <!-- Stats Cards -->
+    <div class="grid grid-4" style="margin-bottom: 16px;">
+      <div class="card">
+        <h3>CPU</h3>
+        <div class="value" id="cpu-percent">0%</div>
+        <div class="sub" id="cpu-cores">0 cores</div>
+        <div class="stat-bar"><div class="fill fill-cpu" id="cpu-bar" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <h3>RAM</h3>
+        <div class="value" id="ram-value">0 / 0 GB</div>
+        <div class="sub" id="ram-percent">0%</div>
+        <div class="stat-bar"><div class="fill fill-ram" id="ram-bar" style="width:0%"></div></div>
+      </div>
+      <div class="card" id="gpu-section" style="display:none;">
+        <h3>GPU</h3>
+        <div class="value" id="gpu-util">0%</div>
+        <div class="sub" id="gpu-name">—</div>
+        <div class="stat-bar"><div class="fill fill-gpu" id="gpu-bar" style="width:0%"></div></div>
+      </div>
+      <div class="card" id="vram-section">
+        <h3>VRAM</h3>
+        <div class="value" id="vram-value">— / — GB</div>
+        <div class="sub"><span id="gpu-temp">—</span> | <span id="gpu-power">—</span></div>
+        <div class="stat-bar"><div class="fill fill-vram" id="vram-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-2" style="margin-bottom: 16px;">
+      <div class="card">
+        <h3>CPU Usage</h3>
+        <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>RAM Usage</h3>
+        <div class="chart-container"><canvas id="ramChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>GPU Utilization</h3>
+        <div class="chart-container"><canvas id="gpuChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>VRAM Usage</h3>
+        <div class="chart-container"><canvas id="vramChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Backends -->
+    <div class="card">
+      <h3>Inference Backends</h3>
+      <table>
+        <thead><tr><th>Backend</th><th>Version</th><th>Status</th></tr></thead>
+        <tbody id="backends-list">
+          <tr><td colspan="3" style="color: var(--text-dim)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Inference Stats -->
+    <div class="card" style="margin-top: 16px;">
+      <h3>Inference</h3>
+      <div class="grid grid-2">
+        <div><span class="sub">Speed:</span> <span id="inf-tps">—</span></div>
+        <div><span class="sub">Tokens:</span> <span id="inf-tokens">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
