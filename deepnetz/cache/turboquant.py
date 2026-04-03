@@ -68,20 +68,20 @@ def recommend_kv_config(model_params_b: float,
     - turbo2_0: aggressive, for extreme memory constraints
     """
     # Estimate KV cache size at f16
-    # More accurate: ~2 MB per 1B params per 1K context tokens
-    # (accounts for GQA ratio, typical head_dim=128)
+    # ~2 MB per 1B params per 1K context tokens
     kv_f16_mb = model_params_b * 2.0 * (target_context / 1024)
 
-    if kv_f16_mb < available_vram_mb * 0.3:
-        # KV cache fits easily, no compression needed
+    # Available memory for KV = total - model weights (rough: 0.5 bytes/param for Q4)
+    model_weight_mb = model_params_b * 500  # ~500 MB per 1B params at Q4
+    free_for_kv = max(available_vram_mb - model_weight_mb, available_vram_mb * 0.3)
+
+    if kv_f16_mb < free_for_kv * 0.5:
         return TurboQuantConfig(k_type="f16", v_type="f16", enabled=False)
 
-    if kv_f16_mb < available_vram_mb * 0.6:
-        # Moderate pressure, use turbo4 (safest)
+    if kv_f16_mb < free_for_kv:
         return TurboQuantConfig(k_type="turbo4_0", v_type="turbo4_0")
 
-    if kv_f16_mb < available_vram_mb:
-        # High pressure, turbo3
+    if kv_f16_mb / 3.6 < free_for_kv:
         return TurboQuantConfig(k_type="turbo3_0", v_type="turbo3_0")
 
     # Extreme pressure

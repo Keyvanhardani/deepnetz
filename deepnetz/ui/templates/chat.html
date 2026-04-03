@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepNetz Chat</title>
   <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .chat-header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--surface); }
+    .model-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius); font-size: 13px; min-width: 250px; }
+    .model-select:focus { border-color: var(--accent); outline: none; }
+    .model-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+    .config-panel { padding: 8px 16px; border-bottom: 1px solid var(--border); display: none; gap: 16px; flex-wrap: wrap; background: var(--surface); }
+    .config-panel.open { display: flex; }
+    .config-item { display: flex; flex-direction: column; gap: 2px; }
+    .config-item label { font-size: 11px; color: var(--text-dim); }
+    .config-item input { width: 80px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+    .btn-icon { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; padding: 4px 8px; }
+    .btn-icon:hover { color: var(--text); }
+    .chat-info { font-size: 11px; color: var(--text-dim); padding: 4px 16px; text-align: center; }
+  </style>
 </head>
 <body>
   <nav>
@@ -14,14 +28,239 @@
     <a href="/models">Models</a>
   </nav>
 
-  <div class="chat-container">
-    <div class="chat-messages" id="messages"></div>
-    <div class="chat-input-area">
-      <textarea class="chat-input" id="input" rows="2" placeholder="Type a message... (Enter to send, Shift+Enter for newline)"></textarea>
-      <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+  <!-- Model selector + config -->
+  <div class="chat-header">
+    <select class="model-select" id="model-selector" onchange="switchModel()">
+      <option value="">Loading models...</option>
+    </select>
+    <span class="badge badge-active" id="backend-badge">--</span>
+    <button class="btn-icon" onclick="toggleConfig()" title="Settings">&#9881;</button>
+    <button class="btn-icon" onclick="clearChat()" title="New chat">&#10010;</button>
+    <button class="btn-icon" onclick="exportChat()" title="Export">&#8595;</button>
+  </div>
+
+  <div class="config-panel" id="config-panel">
+    <div class="config-item">
+      <label>Temperature</label>
+      <input type="number" id="cfg-temp" value="0.7" min="0" max="2" step="0.1">
+    </div>
+    <div class="config-item">
+      <label>Top P</label>
+      <input type="number" id="cfg-topp" value="0.9" min="0" max="1" step="0.05">
+    </div>
+    <div class="config-item">
+      <label>Max Tokens</label>
+      <input type="number" id="cfg-tokens" value="512" min="1" max="4096" step="64">
+    </div>
+    <div class="config-item">
+      <label>Repeat Penalty</label>
+      <input type="number" id="cfg-repeat" value="1.1" min="1" max="2" step="0.05">
     </div>
   </div>
 
-  <script src="/static/chat.js"></script>
+  <div class="chat-container">
+    <div class="chat-messages" id="messages">
+      <div class="chat-info">Select a model and start chatting. Models from all backends are available.</div>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="input" rows="2" placeholder="Type a message... (Enter to send)" disabled></textarea>
+      <button class="btn btn-primary" id="send-btn" onclick="sendMessage()" disabled>Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send-btn');
+    let conversationHistory = [];
+    let currentModel = '';
+
+    // Load available models into selector
+    async function loadModelSelector() {
+      try {
+        const resp = await fetch('/v1/models');
+        const data = await resp.json();
+        const select = document.getElementById('model-selector');
+        const models = data.data || [];
+
+        if (models.length === 0) {
+          select.innerHTML = '<option value="">No models found</option>';
+          return;
+        }
+
+        select.innerHTML = '<option value="">-- Select a model --</option>' +
+          models.map(m => {
+            const size = m.size_mb ? ` (${(m.size_mb/1024).toFixed(1)}GB)` : '';
+            const src = m.backend ? ` [${m.backend}]` : '';
+            return `<option value="${m.path || m.id}" data-backend="${m.backend || 'native'}">${m.id}${size}${src}</option>`;
+          }).join('');
+
+        // Check if a model is already loaded
+        const health = await fetch('/health').then(r=>r.json());
+        if (health.model) {
+          currentModel = health.model;
+          document.getElementById('backend-badge').textContent = health.backend;
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          // Try to select the current model in dropdown
+          for (let opt of select.options) {
+            if (opt.value && (health.model.includes(opt.text.split(' ')[0]) || opt.value.includes(health.model))) {
+              opt.selected = true;
+              break;
+            }
+          }
+        }
+      } catch(e) {
+        console.error('Failed to load models:', e);
+      }
+    }
+
+    async function switchModel() {
+      const select = document.getElementById('model-selector');
+      const path = select.value;
+      if (!path) return;
+
+      const backend = select.selectedOptions[0]?.dataset?.backend || 'native';
+      const badge = document.getElementById('backend-badge');
+      badge.textContent = 'loading...';
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+
+      try {
+        const resp = await fetch('/v1/models/load', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({model: path, backend: backend})
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          currentModel = path;
+          badge.textContent = backend;
+          badge.className = 'badge badge-active';
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
+          appendInfo(`Model loaded: ${select.selectedOptions[0]?.text || path}`);
+        } else {
+          throw new Error(data.error || 'Failed');
+        }
+      } catch(e) {
+        badge.textContent = 'error';
+        badge.className = 'badge badge-inactive';
+        appendInfo(`Error: ${e.message}`);
+      }
+    }
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text || inputEl.disabled) return;
+      inputEl.value = '';
+
+      conversationHistory.push({role: 'user', content: text});
+      appendMessage('user', text);
+
+      const assistantEl = appendMessage('assistant', '');
+      let fullResponse = '';
+
+      const temp = parseFloat(document.getElementById('cfg-temp').value) || 0.7;
+      const maxTokens = parseInt(document.getElementById('cfg-tokens').value) || 512;
+
+      try {
+        const response = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            model: 'deepnetz',
+            messages: conversationHistory,
+            stream: true,
+            max_tokens: maxTokens,
+            temperature: temp,
+          }),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const chunk = JSON.parse(line.slice(6));
+                const content = chunk.choices?.[0]?.delta?.content || '';
+                if (content) {
+                  fullResponse += content;
+                  assistantEl.querySelector('.msg-content').textContent = fullResponse;
+                  messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+              } catch(e) {}
+            }
+          }
+        }
+        conversationHistory.push({role: 'assistant', content: fullResponse});
+      } catch(e) {
+        assistantEl.querySelector('.msg-content').textContent = `Error: ${e.message}`;
+      }
+    }
+
+    function appendMessage(role, content) {
+      // Remove info messages
+      messagesEl.querySelectorAll('.chat-info').forEach(el => el.remove());
+      const div = document.createElement('div');
+      div.className = `msg msg-${role}`;
+      div.innerHTML = `<div class="msg-content">${escapeHtml(content)}</div>`;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function appendInfo(text) {
+      const div = document.createElement('div');
+      div.className = 'chat-info';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function toggleConfig() {
+      document.getElementById('config-panel').classList.toggle('open');
+    }
+
+    function clearChat() {
+      conversationHistory = [];
+      messagesEl.innerHTML = '<div class="chat-info">Chat cleared. Start a new conversation.</div>';
+    }
+
+    function exportChat() {
+      const text = conversationHistory.map(m =>
+        `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`
+      ).join('\n\n');
+      const blob = new Blob([text], {type: 'text/plain'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `deepnetz-chat-${Date.now()}.txt`;
+      a.click();
+    }
+
+    loadModelSelector();
+  </script>
 </body>
 </html>

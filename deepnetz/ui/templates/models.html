@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepNetz Models</title>
   <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .model-status { font-size: 12px; margin-top: 4px; }
+    .model-status.loading { color: var(--yellow); }
+    .model-status.loaded { color: var(--green); }
+    .model-status.error { color: var(--red); }
+    .model-source { font-size: 11px; color: var(--text-dim); }
+    .btn-load { min-width: 80px; }
+    .btn-load.active { background: var(--green); border-color: var(--green); color: #fff; }
+    .search-bar { width: 100%; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); margin-bottom: 16px; font-size: 14px; }
+    .search-bar:focus { outline: none; border-color: var(--accent); }
+    .download-section { margin-top: 16px; }
+    .download-input { display: flex; gap: 8px; }
+    .download-input input { flex: 1; }
+    .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; display: none; }
+    .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
+  </style>
 </head>
 <body>
   <nav>
@@ -15,39 +31,155 @@
   </nav>
 
   <div class="container">
+    <!-- Search -->
+    <input class="search-bar" type="text" id="search" placeholder="Search models..." oninput="filterModels()">
+
+    <!-- Current Model -->
+    <div class="card" style="margin-bottom: 16px;" id="current-model-card">
+      <h3>Current Model</h3>
+      <div id="current-model">No model loaded</div>
+    </div>
+
+    <!-- Available Models -->
     <div class="card" style="margin-bottom: 16px;">
       <h3>Available Models</h3>
       <table>
-        <thead><tr><th>Model</th><th>Backend</th><th>Size</th><th>Action</th></tr></thead>
+        <thead><tr><th>Model</th><th>Source</th><th>Size</th><th>Action</th></tr></thead>
         <tbody id="model-list">
-          <tr><td colspan="4" style="color: var(--text-dim)">Loading...</td></tr>
+          <tr><td colspan="4" style="color: var(--text-dim)">Scanning backends...</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Download -->
+    <div class="card download-section">
+      <h3>Download Model</h3>
+      <div class="download-input">
+        <input class="search-bar" style="margin:0" type="text" id="download-ref" placeholder="hf://unsloth/Qwen3.5-35B-A3B-GGUF or ollama://qwen3.5:35b">
+        <button class="btn btn-primary" onclick="downloadModel()">Download</button>
+      </div>
+      <div class="progress-bar" id="download-progress"><div class="fill" style="width:0%"></div></div>
+      <div class="model-status" id="download-status"></div>
     </div>
   </div>
 
   <script>
+    let allModels = [];
+
     async function loadModels() {
       try {
         const resp = await fetch('/v1/models');
         const data = await resp.json();
-        const el = document.getElementById('model-list');
-        if (data.data && data.data.length > 0) {
-          el.innerHTML = data.data.map(m => {
-            const size = m.size_mb ? `${(m.size_mb/1024).toFixed(1)} GB` : '—';
-            return `<tr><td>${m.id}</td><td><span class="badge badge-active">${m.backend || 'unknown'}</span></td><td>${size}</td><td><button class="btn" onclick="loadModel('${m.id}')">Load</button></td></tr>`;
-          }).join('');
-        } else {
-          el.innerHTML = '<tr><td colspan="4">No models found</td></tr>';
-        }
+        allModels = data.data || [];
+        renderModels(allModels);
       } catch (e) {
-        document.getElementById('model-list').innerHTML = `<tr><td colspan="4">Error: ${e.message}</td></tr>`;
+        document.getElementById('model-list').innerHTML = `<tr><td colspan="4" style="color:var(--red)">Error: ${e.message}</td></tr>`;
       }
     }
 
-    async function loadModel(name) {
-      alert('Model loading: ' + name + '\nThis feature is coming in v0.8');
+    function renderModels(models) {
+      const el = document.getElementById('model-list');
+      if (models.length === 0) {
+        el.innerHTML = '<tr><td colspan="4">No models found</td></tr>';
+        return;
+      }
+      el.innerHTML = models.map(m => {
+        const size = m.size_mb ? `${(m.size_mb/1024).toFixed(1)} GB` : '--';
+        const source = m.backend || 'unknown';
+        const sourceColors = {native:'#58a6ff', ollama:'#3fb950', lmstudio:'#d29922', huggingface:'#f85149', vllm:'#a371f7', remote:'#8b949e'};
+        const color = sourceColors[source] || '#8b949e';
+        return `<tr>
+          <td>
+            <div>${m.id}</div>
+            ${m.path ? `<div class="model-source">${m.path}</div>` : ''}
+          </td>
+          <td><span class="badge" style="background:${color}22;color:${color}">${source}</span></td>
+          <td>${size}</td>
+          <td>
+            <button class="btn btn-load" id="btn-${btoa(m.id).replace(/=/g,'')}" onclick="loadModel('${m.id.replace(/'/g,"\\'")}', '${m.path ? m.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'") : m.id}', '${source}')">Load</button>
+            <div class="model-status" id="status-${btoa(m.id).replace(/=/g,'')}"></div>
+          </td>
+        </tr>`;
+      }).join('');
     }
+
+    function filterModels() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = allModels.filter(m =>
+        m.id.toLowerCase().includes(q) || (m.backend||'').toLowerCase().includes(q)
+      );
+      renderModels(filtered);
+    }
+
+    async function loadModel(name, path, source) {
+      const btnId = 'btn-' + btoa(name).replace(/=/g,'');
+      const statusId = 'status-' + btoa(name).replace(/=/g,'');
+      const btn = document.getElementById(btnId);
+      const status = document.getElementById(statusId);
+
+      if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+      if (status) { status.textContent = 'Loading model...'; status.className = 'model-status loading'; }
+
+      try {
+        const resp = await fetch('/v1/models/load', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({model: path || name, backend: source})
+        });
+        const data = await resp.json();
+
+        if (data.status === 'ok') {
+          if (btn) { btn.textContent = 'Active'; btn.className = 'btn btn-load active'; btn.disabled = false; }
+          if (status) { status.textContent = 'Model loaded!'; status.className = 'model-status loaded'; }
+          document.getElementById('current-model').textContent = `${name} (${source})`;
+        } else {
+          throw new Error(data.error || 'Failed to load');
+        }
+      } catch(e) {
+        if (btn) { btn.textContent = 'Load'; btn.disabled = false; }
+        if (status) { status.textContent = `Error: ${e.message}`; status.className = 'model-status error'; }
+      }
+    }
+
+    async function downloadModel() {
+      const ref = document.getElementById('download-ref').value.trim();
+      if (!ref) return;
+
+      const status = document.getElementById('download-status');
+      const progress = document.getElementById('download-progress');
+
+      status.textContent = 'Starting download...';
+      status.className = 'model-status loading';
+      progress.style.display = 'block';
+      progress.querySelector('.fill').style.width = '30%';
+
+      try {
+        const resp = await fetch('/v1/models/download', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({model: ref})
+        });
+        const data = await resp.json();
+        progress.querySelector('.fill').style.width = '100%';
+
+        if (data.status === 'ok') {
+          status.textContent = `Downloaded: ${data.path || ref}`;
+          status.className = 'model-status loaded';
+          loadModels(); // refresh list
+        } else {
+          throw new Error(data.error || 'Download failed');
+        }
+      } catch(e) {
+        status.textContent = `Error: ${e.message}`;
+        status.className = 'model-status error';
+        progress.querySelector('.fill').style.width = '0%';
+      }
+    }
+
+    // Check current model
+    fetch('/health').then(r=>r.json()).then(d => {
+      if (d.model) document.getElementById('current-model').textContent = `${d.model} (${d.backend})`;
+    }).catch(()=>{});
 
     loadModels();
   </script>

@@ -92,6 +92,38 @@ def create_app(model_path: str,
     async def list_backends():
         return [{"name": b.name, **b.detect().__dict__} for b in model.backends]
 
+    class LoadRequest(PydanticBaseModel):
+        model: str
+        backend: str = "native"
+
+    class DownloadRequest(PydanticBaseModel):
+        model: str
+
+    @app.post("/v1/models/load")
+    async def load_model_endpoint(req: LoadRequest):
+        try:
+            model.backend.unload()
+            # Resolve model path
+            from deepnetz.engine.resolver import resolve_model
+            try:
+                path = resolve_model(req.model)
+            except FileNotFoundError:
+                path = req.model
+            model.backend.load(path)
+            model.model_ref = req.model
+            return {"status": "ok", "model": req.model}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    @app.post("/v1/models/download")
+    async def download_model_endpoint(req: DownloadRequest):
+        try:
+            from deepnetz.engine.resolver import resolve_model
+            path = resolve_model(req.model, output_dir=".")
+            return {"status": "ok", "path": path}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     @app.get("/health")
     async def health():
         return {"status": "ok", "backend": model.backend.name,
