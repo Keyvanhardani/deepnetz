@@ -76,7 +76,8 @@ class CleanSourceBuildExt(build_ext if build_ext else object):
                 print(f"  Removed intermediate: {c_file}")
 
 
-setup(
+if __name__ == "__main__":
+  setup(
     name="deepnetz",
     version="0.2.0",
     description="Run massive models on minimal hardware",
@@ -120,4 +121,4 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Operating System :: OS Independent",
     ],
-)
+  )

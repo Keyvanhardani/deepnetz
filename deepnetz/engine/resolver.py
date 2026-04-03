@@ -1,14 +1,17 @@
 """
-Universal Model Resolver — load models from any source.
+Universal Model Resolver — load models from ANY source.
 
 Supports:
     ./model.gguf                    → local file
     hf://user/repo/file.gguf        → HuggingFace
     ollama://model:tag              → Ollama local registry
     lmstudio://model                → LM Studio local cache
+    vllm://model                    → vLLM model cache
+    llamacpp://model                → llama.cpp models directory
+    mlx://model                     → MLX models (Apple Silicon)
     https://url/model.gguf          → direct URL download
 
-Also auto-detects models already downloaded by Ollama or LM Studio.
+Also auto-searches: Ollama, LM Studio, vLLM, llama.cpp, MLX caches.
 """
 
 import os
@@ -32,14 +35,19 @@ def resolve_model(model_ref: str, output_dir: str = ".") -> str:
     if "://" in model_ref:
         protocol, path = model_ref.split("://", 1)
 
-        if protocol == "hf":
-            return _resolve_huggingface(path, output_dir)
-        elif protocol == "ollama":
-            return _resolve_ollama(path)
-        elif protocol == "lmstudio":
-            return _resolve_lmstudio(path)
-        elif protocol in ("http", "https"):
-            return _resolve_url(model_ref, output_dir)
+        resolvers = {
+            "hf": lambda p: _resolve_huggingface(p, output_dir),
+            "huggingface": lambda p: _resolve_huggingface(p, output_dir),
+            "ollama": _resolve_ollama,
+            "lmstudio": _resolve_lmstudio,
+            "vllm": _resolve_vllm,
+            "llamacpp": _resolve_llamacpp,
+            "mlx": _resolve_mlx,
+            "http": lambda p: _resolve_url(model_ref, output_dir),
+            "https": lambda p: _resolve_url(model_ref, output_dir),
+        }
+        if protocol in resolvers:
+            return resolvers[protocol](path)
         else:
             raise ValueError(f"Unknown protocol: {protocol}")
 
@@ -189,6 +197,69 @@ def _resolve_url(url: str, output_dir: str) -> str:
     print(f"  Downloading {url}...")
     urllib.request.urlretrieve(url, output_path)
     return output_path
+
+
+def _resolve_vllm(name: str) -> str:
+    """Find model in vLLM's cache (HuggingFace models, safetensors).
+    vLLM uses HF Hub cache. We look for GGUF conversions or point to HF."""
+    # vLLM uses ~/.cache/huggingface/hub/ for model storage
+    hf_cache = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+    if os.path.exists(hf_cache):
+        pattern = os.path.join(hf_cache, "**", f"*{name}*.gguf")
+        matches = glob.glob(pattern, recursive=True)
+        if matches:
+            print(f"  Found in HF/vLLM cache: {matches[0]}")
+            return matches[0]
+
+    raise FileNotFoundError(
+        f"vLLM model '{name}' not found in HF cache.\n"
+        f"vLLM uses safetensors (not GGUF). Try:\n"
+        f"  deepnetz run hf://{name}  (auto-downloads GGUF version)"
+    )
+
+
+def _resolve_llamacpp(name: str) -> str:
+    """Find model in common llama.cpp model directories."""
+    search_dirs = [
+        os.path.expanduser("~/llama.cpp/models"),
+        os.path.expanduser("~/.local/share/llama.cpp/models"),
+        "/opt/llama.cpp/models",
+    ]
+    if platform.system() == "Windows":
+        search_dirs.extend([
+            os.path.expanduser("~/llama.cpp/models"),
+            "C:/llama.cpp/models",
+        ])
+
+    for d in search_dirs:
+        if os.path.exists(d):
+            pattern = os.path.join(d, "**", f"*{name}*.gguf")
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                print(f"  Found llama.cpp model: {matches[0]}")
+                return matches[0]
+
+    raise FileNotFoundError(f"llama.cpp model '{name}' not found.")
+
+
+def _resolve_mlx(name: str) -> str:
+    """Find model in MLX models cache (Apple Silicon)."""
+    mlx_dirs = [
+        os.path.expanduser("~/.cache/huggingface/hub"),
+        os.path.expanduser("~/mlx_models"),
+    ]
+    for d in mlx_dirs:
+        if os.path.exists(d):
+            pattern = os.path.join(d, "**", f"*{name}*.gguf")
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                print(f"  Found MLX model: {matches[0]}")
+                return matches[0]
+
+    raise FileNotFoundError(
+        f"MLX model '{name}' not found. MLX uses safetensors format.\n"
+        f"Try: deepnetz run hf://{name}"
+    )
 
 
 def _search_local(name: str) -> Optional[str]:
