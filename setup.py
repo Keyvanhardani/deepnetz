@@ -93,6 +93,10 @@ setup(
     packages=find_packages(),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": CleanSourceBuildExt} if USE_CYTHON else {},
+    exclude_package_data={"": ["*.py"], "deepnetz": ["cli.py", "server.py"],
+                          "deepnetz.engine": ["model.py", "backend.py", "hardware.py",
+                                               "planner.py", "gguf_reader.py", "downloader.py",
+                                               "resolver.py"]},
     python_requires=">=3.9",
     install_requires=[
         "llama-cpp-python>=0.3.0",

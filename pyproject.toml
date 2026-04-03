@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=64", "wheel", "cython"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepnetz"
-version = "0.1.0"
+version = "0.2.0"
 description = "Run massive models on minimal hardware"
 readme = "README.md"
 license = {text = "MIT"}
