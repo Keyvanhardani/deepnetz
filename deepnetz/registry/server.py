@@ -93,7 +93,30 @@ def create_registry_app(db_path: str = ""):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT, model TEXT, quant TEXT, repo TEXT, ts REAL
     )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT DEFAULT ''
+    )""")
     db.commit()
+
+    # ── Config from DB (overrides env vars) ────────────────────────
+
+    def _get_cfg(key: str, default: str = "") -> str:
+        row = db.execute("SELECT value FROM config WHERE key=?", (key,)).fetchone()
+        if row and row[0]:
+            return row[0]
+        return default
+
+    def _set_cfg(key: str, value: str):
+        db.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?,?)", (key, value))
+        db.commit()
+
+    # Load OAuth from DB first, then env fallback
+    def _github_id(): return _get_cfg("github_client_id", GITHUB_CLIENT_ID)
+    def _github_secret(): return _get_cfg("github_client_secret", GITHUB_CLIENT_SECRET)
+    def _google_id(): return _get_cfg("google_client_id", GOOGLE_CLIENT_ID)
+    def _google_secret(): return _get_cfg("google_client_secret", GOOGLE_CLIENT_SECRET)
+    def _base_url(): return _get_cfg("base_url", BASE_URL)
 
     # Migrate: add email, oauth columns if missing
     for col, default in [("email", "''"), ("oauth_provider", "''"), ("oauth_id", "''")]:
@@ -243,7 +266,7 @@ def create_registry_app(db_path: str = ""):
         return {
             "device_code": code,
             "user_code": user_code,
-            "verification_url": f"{BASE_URL}/auth?code={user_code}",
+            "verification_url": f"{_base_url()}/auth?code={user_code}",
             "expires_in": 600,
         }
 
@@ -278,12 +301,12 @@ def create_registry_app(db_path: str = ""):
 
     @app.get("/v1/auth/github")
     async def github_start(device_code: str = ""):
-        if not GITHUB_CLIENT_ID:
-            raise HTTPException(501, "GitHub OAuth nicht konfiguriert")
+        if not _github_id():
+            raise HTTPException(501, "GitHub OAuth nicht konfiguriert. Konfiguriere unter /admin")
         state = device_code or secrets.token_hex(16)
         params = urllib.parse.urlencode({
-            "client_id": GITHUB_CLIENT_ID,
-            "redirect_uri": f"{BASE_URL}/v1/auth/github/callback",
+            "client_id": _github_id(),
+            "redirect_uri": f"{_base_url()}/v1/auth/github/callback",
             "scope": "read:user user:email",
             "state": state,
         })
@@ -291,12 +314,12 @@ def create_registry_app(db_path: str = ""):
 
     @app.get("/v1/auth/github/callback")
     async def github_callback(code: str, state: str = ""):
-        if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        if not _github_id() or not _github_secret():
             raise HTTPException(501, "GitHub OAuth nicht konfiguriert")
         # Exchange code for token
         token_data = _oauth_request("https://github.com/login/oauth/access_token", {
-            "client_id": GITHUB_CLIENT_ID,
-            "client_secret": GITHUB_CLIENT_SECRET,
+            "client_id": _github_id(),
+            "client_secret": _github_secret(),
             "code": code,
         })
         access_token = token_data.get("access_token")
@@ -323,12 +346,12 @@ def create_registry_app(db_path: str = ""):
 
     @app.get("/v1/auth/google")
     async def google_start(device_code: str = ""):
-        if not GOOGLE_CLIENT_ID:
-            raise HTTPException(501, "Google OAuth nicht konfiguriert")
+        if not _google_id():
+            raise HTTPException(501, "Google OAuth nicht konfiguriert. Konfiguriere unter /admin")
         state = device_code or secrets.token_hex(16)
         params = urllib.parse.urlencode({
-            "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": f"{BASE_URL}/v1/auth/google/callback",
+            "client_id": _google_id(),
+            "redirect_uri": f"{_base_url()}/v1/auth/google/callback",
             "response_type": "code",
             "scope": "openid email profile",
             "state": state,
@@ -337,14 +360,14 @@ def create_registry_app(db_path: str = ""):
 
     @app.get("/v1/auth/google/callback")
     async def google_callback(code: str, state: str = ""):
-        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        if not _google_id() or not _google_secret():
             raise HTTPException(501, "Google OAuth nicht konfiguriert")
         token_data = _oauth_request("https://oauth2.googleapis.com/token", {
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
+            "client_id": _google_id(),
+            "client_secret": _google_secret(),
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": f"{BASE_URL}/v1/auth/google/callback",
+            "redirect_uri": f"{_base_url()}/v1/auth/google/callback",
         })
         access_token = token_data.get("access_token")
         if not access_token:
@@ -478,7 +501,69 @@ code {{ background: #21262d; padding: 4px 10px; border-radius: 4px; font-size: 1
         user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         pull_count = db.execute("SELECT COUNT(*) FROM pull_log").fetchone()[0]
         return {"status": "ok", "version": "1.1.0", "users": user_count, "pulls": pull_count,
-                "oauth": {"github": bool(GITHUB_CLIENT_ID), "google": bool(GOOGLE_CLIENT_ID)}}
+                "oauth": {"github": bool(_github_id()), "google": bool(_google_id())}}
+
+    # ── Admin Panel (nur intern/VPN erreichbar + Passwort) ────────
+
+    ADMIN_PASSWORD = _get_cfg("admin_password", os.environ.get("ADMIN_PASSWORD", ""))
+
+    from fastapi import Request
+
+    def _check_admin(request: Request):
+        """Check admin auth via header or query param."""
+        pw = ADMIN_PASSWORD or _get_cfg("admin_password", "")
+        if not pw:
+            # Kein Passwort gesetzt → Admin gesperrt bis eins gesetzt wird
+            raise HTTPException(403, "Admin-Passwort nicht konfiguriert. Setze ADMIN_PASSWORD als Env-Var im Container.")
+        token = request.headers.get("X-Admin-Token", "") or request.query_params.get("token", "")
+        if token != pw:
+            raise HTTPException(401, "Ungültiges Admin-Token")
+
+    class ConfigUpdate(PydanticBaseModel):
+        key: str
+        value: str
+
+    @app.get("/admin/api/config")
+    async def admin_get_config(request: Request):
+        _check_admin(request)
+        rows = db.execute("SELECT key, value FROM config").fetchall()
+        cfg = {r[0]: r[1] for r in rows}
+        return cfg
+
+    @app.post("/admin/api/config")
+    async def admin_set_config(req: ConfigUpdate, request: Request):
+        _check_admin(request)
+        _set_cfg(req.key, req.value)
+        return {"status": "ok", "key": req.key}
+
+    @app.get("/admin/api/users")
+    async def admin_list_users(request: Request):
+        _check_admin(request)
+        rows = db.execute(
+            "SELECT id, username, email, oauth_provider, created_at, last_seen FROM users ORDER BY created_at DESC LIMIT 100"
+        ).fetchall()
+        return [{"id": r[0], "username": r[1], "email": r[2], "provider": r[3],
+                 "created_at": r[4], "last_seen": r[5]} for r in rows]
+
+    @app.delete("/admin/api/users/{user_id}")
+    async def admin_delete_user(user_id: str, request: Request):
+        _check_admin(request)
+        db.execute("DELETE FROM users WHERE id=?", (user_id,))
+        db.commit()
+        return {"status": "ok"}
+
+    @app.get("/admin/api/pulls")
+    async def admin_list_pulls(request: Request):
+        _check_admin(request)
+        rows = db.execute(
+            "SELECT user_id, model, quant, repo, ts FROM pull_log ORDER BY ts DESC LIMIT 100"
+        ).fetchall()
+        return [{"user_id": r[0], "model": r[1], "quant": r[2], "repo": r[3], "ts": r[4]} for r in rows]
+
+    @app.get("/admin", response_class=HTMLResponse)
+    async def admin_page(request: Request):
+        _check_admin(request)
+        return HTMLResponse(_ADMIN_HTML)
 
     return app
 
@@ -486,5 +571,131 @@ code {{ background: #21262d; padding: 4px 10px; border-radius: 4px; font-size: 1
 def _create_standalone_app():
     db = os.environ.get("DEEPNETZ_DB_PATH", "")
     return create_registry_app(db_path=db)
+
+_ADMIN_HTML = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DeepNetz Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;max-width:900px;margin:0 auto}
+h1{font-size:22px;margin-bottom:24px;display:flex;align-items:center;gap:10px}
+h1 span{color:#58a6ff}
+h2{font-size:16px;margin:28px 0 12px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin-bottom:16px}
+.field{display:flex;gap:10px;margin-bottom:10px;align-items:center}
+.field label{width:180px;font-size:13px;color:#8b949e;flex-shrink:0}
+.field input{flex:1;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:8px 12px;font-size:13px;outline:none}
+.field input:focus{border-color:#58a6ff}
+.field button{background:#238636;border:none;border-radius:6px;color:#fff;padding:8px 16px;font-size:13px;cursor:pointer;white-space:nowrap}
+.field button:hover{background:#2ea043}
+.status{font-size:12px;color:#3fb950;margin-left:8px;display:none}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:#8b949e;font-weight:500;padding:8px;border-bottom:1px solid #30363d}
+td{padding:8px;border-bottom:1px solid #21262d;color:#e6edf3}
+.del-btn{background:#da3633;border:none;border-radius:4px;color:#fff;padding:3px 10px;font-size:11px;cursor:pointer}
+.del-btn:hover{background:#f85149}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.badge-gh{background:rgba(88,166,255,0.15);color:#58a6ff}
+.badge-go{background:rgba(63,185,80,0.15);color:#3fb950}
+.badge-pw{background:rgba(139,148,158,0.15);color:#8b949e}
+.info{font-size:12px;color:#6e7681;margin-top:6px;line-height:1.5}
+.info a{color:#58a6ff}
+.tabs{display:flex;gap:4px;margin-bottom:20px}
+.tab{padding:8px 16px;background:#21262d;border:1px solid #30363d;border-radius:8px;color:#8b949e;cursor:pointer;font-size:13px}
+.tab.active{background:#30363d;color:#e6edf3;border-color:#484f58}
+.panel{display:none}.panel.active{display:block}
+</style></head><body>
+<h1>DN <span>DeepNetz Admin</span></h1>
+
+<div class="tabs">
+  <div class="tab active" onclick="showPanel('config')">Config</div>
+  <div class="tab" onclick="showPanel('users')">Users</div>
+  <div class="tab" onclick="showPanel('pulls')">Pull Log</div>
+</div>
+
+<div class="panel active" id="panel-config">
+  <h2>OAuth Configuration</h2>
+  <div class="card">
+    <div class="field"><label>Base URL</label><input id="c-base_url" placeholder="https://registry.deepnetz.com"><button onclick="save('base_url')">Save</button><span class="status" id="s-base_url">Saved</span></div>
+    <div class="info">Callback-URLs für OAuth: <code>{base_url}/v1/auth/github/callback</code> und <code>{base_url}/v1/auth/google/callback</code></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">GitHub OAuth</h2>
+    <div class="field"><label>Client ID</label><input id="c-github_client_id" placeholder="Ov23li..."><button onclick="save('github_client_id')">Save</button><span class="status" id="s-github_client_id">Saved</span></div>
+    <div class="field"><label>Client Secret</label><input id="c-github_client_secret" type="password" placeholder="secret..."><button onclick="save('github_client_secret')">Save</button><span class="status" id="s-github_client_secret">Saved</span></div>
+    <div class="info">
+      Erstellen: <a href="https://github.com/settings/developers" target="_blank">github.com/settings/developers</a> &rarr; New OAuth App<br>
+      Homepage URL: <code>https://deepnetz.com</code><br>
+      Callback URL: <code>https://registry.deepnetz.com/v1/auth/github/callback</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Google OAuth</h2>
+    <div class="field"><label>Client ID</label><input id="c-google_client_id" placeholder="123...apps.googleusercontent.com"><button onclick="save('google_client_id')">Save</button><span class="status" id="s-google_client_id">Saved</span></div>
+    <div class="field"><label>Client Secret</label><input id="c-google_client_secret" type="password" placeholder="GOCSPX-..."><button onclick="save('google_client_secret')">Save</button><span class="status" id="s-google_client_secret">Saved</span></div>
+    <div class="info">
+      Erstellen: <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> &rarr; Create Credentials &rarr; OAuth Client ID<br>
+      Application type: Web application<br>
+      Authorized redirect URI: <code>https://registry.deepnetz.com/v1/auth/google/callback</code>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-users">
+  <h2>Registered Users</h2>
+  <div class="card"><table><thead><tr><th>Username</th><th>Email</th><th>Provider</th><th>Created</th><th>Last Seen</th><th></th></tr></thead><tbody id="users-table"></tbody></table></div>
+</div>
+
+<div class="panel" id="panel-pulls">
+  <h2>Pull Log (last 100)</h2>
+  <div class="card"><table><thead><tr><th>User</th><th>Model</th><th>Quant</th><th>Repo</th><th>Time</th></tr></thead><tbody id="pulls-table"></tbody></table></div>
+</div>
+
+<script>
+function showPanel(name){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active')});
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
+  document.getElementById('panel-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if(name==='users')loadUsers();
+  if(name==='pulls')loadPulls();
+}
+var adminToken=new URLSearchParams(window.location.search).get('token')||'';
+function af(url,opts){opts=opts||{};opts.headers=opts.headers||{};opts.headers['X-Admin-Token']=adminToken;return fetch(url,opts);}
+async function loadConfig(){
+  var r=await af('/admin/api/config');var d=await r.json();
+  for(var k in d){var el=document.getElementById('c-'+k);if(el)el.value=d[k];}
+}
+async function save(key){
+  var val=document.getElementById('c-'+key).value;
+  await af('/admin/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key,value:val})});
+  var s=document.getElementById('s-'+key);s.style.display='inline';setTimeout(function(){s.style.display='none'},2000);
+}
+async function loadUsers(){
+  var r=await af('/admin/api/users');var d=await r.json();
+  var el=document.getElementById('users-table');
+  el.innerHTML=d.map(function(u){
+    var p=u.provider==='github'?'<span class="badge badge-gh">GitHub</span>':u.provider==='google'?'<span class="badge badge-go">Google</span>':'<span class="badge badge-pw">Email</span>';
+    var c=u.created_at?new Date(u.created_at*1000).toLocaleDateString():'—';
+    var l=u.last_seen?new Date(u.last_seen*1000).toLocaleDateString():'—';
+    return '<tr><td>'+u.username+'</td><td>'+(u.email||'—')+'</td><td>'+p+'</td><td>'+c+'</td><td>'+l+'</td><td><button class="del-btn" onclick="delUser(\\''+u.id+'\\')">Delete</button></td></tr>';
+  }).join('');
+}
+async function delUser(id){
+  if(!confirm('User löschen?'))return;
+  await af('/admin/api/users/'+id,{method:'DELETE'});loadUsers();
+}
+async function loadPulls(){
+  var r=await af('/admin/api/pulls');var d=await r.json();
+  var el=document.getElementById('pulls-table');
+  el.innerHTML=d.map(function(p){
+    var t=p.ts?new Date(p.ts*1000).toLocaleString():'—';
+    return '<tr><td>'+(p.user_id||'anon')+'</td><td>'+(p.model||'—')+'</td><td>'+(p.quant||'—')+'</td><td>'+(p.repo||'—')+'</td><td>'+t+'</td></tr>';
+  }).join('');
+}
+loadConfig();
+</script></body></html>"""
 
 app = _create_standalone_app()

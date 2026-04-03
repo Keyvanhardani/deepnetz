@@ -6,11 +6,12 @@ services:
     container_name: deepnetz-registry
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "10.100.0.1:8090:8090"
     volumes:
       - deepnetz-registry-data:/data
     environment:
       - DEEPNETZ_DB_PATH=/data/registry.db
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
     networks:
       - proxy
       - default
