@@ -72,6 +72,33 @@ def is_vision_model(model_name: str) -> bool:
     return any(kw in name for kw in vision_keywords)
 
 
+def is_moe_model(model_name: str) -> bool:
+    """Check if model is MoE architecture."""
+    name = model_name.lower()
+    moe_keywords = ["moe", "a3b", "a4b", "a10b", "a22b", "mixtral",
+                    "switch", "gpt-oss", "dbrx"]
+    # Gemma 4 26B is MoE (A4B = 4B active)
+    if "gemma-4" in name and ("26b" in name or "a4b" in name):
+        return True
+    return any(kw in name for kw in moe_keywords)
+
+
+def recommend_apex_variant(model_name: str) -> Optional[str]:
+    """Recommend APEX GGUF variant for MoE models if available."""
+    if not is_moe_model(model_name):
+        return None
+    # Known APEX variants on HuggingFace
+    apex_repos = {
+        "gemma-4-26b": "mudler/gemma-4-26B-A4B-it-APEX-GGUF",
+        "qwen3.5-35b": "mudler/Qwen3.5-35B-A3B-APEX-GGUF",
+    }
+    name = model_name.lower()
+    for key, repo in apex_repos.items():
+        if key.replace("-", "") in name.replace("-", "").replace("_", ""):
+            return repo
+    return None
+
+
 # ── Reasoning Mode ─────────────────────────────────────────────────────
 
 def parse_reasoning(text: str) -> Tuple[str, str]:

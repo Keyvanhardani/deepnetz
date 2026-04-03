@@ -70,6 +70,13 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
     """
     warnings = []
 
+    # Check for MoE + APEX recommendation
+    from deepnetz.engine.features import is_moe_model, recommend_apex_variant
+    if is_moe_model(model.name):
+        apex_repo = recommend_apex_variant(model.name)
+        if apex_repo:
+            warnings.append(f"MoE model detected. APEX variant available: deepnetz pull {apex_repo}")
+
     gpu_budget = gpu_budget_mb or (hw.total_vram_mb - 500)  # 500MB overhead
     ram_budget = ram_budget_mb or (hw.ram_mb - 4096)  # 4GB for OS
 
