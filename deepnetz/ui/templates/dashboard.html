@@ -5,86 +5,360 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepNetz Dashboard</title>
   <link rel="stylesheet" href="/static/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <nav>
-    <span class="logo">DeepNetz</span>
-    <a href="/" class="active">Dashboard</a>
-    <a href="/chat">Chat</a>
-    <a href="/models">Models</a>
-  </nav>
+  <div class="app-shell">
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-  <div class="container">
-    <!-- Stats Cards -->
-    <div class="grid grid-4" style="margin-bottom: 16px;">
-      <div class="card">
-        <h3>CPU</h3>
-        <div class="value" id="cpu-percent">0%</div>
-        <div class="sub" id="cpu-cores">0 cores</div>
-        <div class="stat-bar"><div class="fill fill-cpu" id="cpu-bar" style="width:0%"></div></div>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-icon">DN</div>
+          <div class="sidebar-brand-text">DeepNetz</div>
+        </div>
       </div>
-      <div class="card">
-        <h3>RAM</h3>
-        <div class="value" id="ram-value">0 / 0 GB</div>
-        <div class="sub" id="ram-percent">0%</div>
-        <div class="stat-bar"><div class="fill fill-ram" id="ram-bar" style="width:0%"></div></div>
-      </div>
-      <div class="card" id="gpu-section" style="display:none;">
-        <h3>GPU</h3>
-        <div class="value" id="gpu-util">0%</div>
-        <div class="sub" id="gpu-name">--</div>
-        <div class="stat-bar"><div class="fill fill-gpu" id="gpu-bar" style="width:0%"></div></div>
-      </div>
-      <div class="card" id="vram-section">
-        <h3>VRAM</h3>
-        <div class="value" id="vram-value">-- / -- GB</div>
-        <div class="sub"><span id="gpu-temp">--</span> | <span id="gpu-power">--</span></div>
-        <div class="stat-bar"><div class="fill fill-vram" id="vram-bar" style="width:0%"></div></div>
-      </div>
-    </div>
 
-    <!-- Charts -->
-    <div class="grid grid-2" style="margin-bottom: 16px;">
-      <div class="card">
-        <h3>CPU Usage</h3>
-        <div class="chart-container"><canvas id="cpuChart"></canvas></div>
-      </div>
-      <div class="card">
-        <h3>RAM Usage</h3>
-        <div class="chart-container"><canvas id="ramChart"></canvas></div>
-      </div>
-      <div class="card">
-        <h3>GPU Utilization</h3>
-        <div class="chart-container"><canvas id="gpuChart"></canvas></div>
-      </div>
-      <div class="card">
-        <h3>VRAM Usage</h3>
-        <div class="chart-container"><canvas id="vramChart"></canvas></div>
-      </div>
-    </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-link active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a href="/chat" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Chat
+        </a>
+        <a href="/models" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          Models
+        </a>
+      </nav>
 
-    <!-- Backends -->
-    <div class="card">
-      <h3>Inference Backends</h3>
-      <table>
-        <thead><tr><th>Backend</th><th>Version</th><th>Status</th></tr></thead>
-        <tbody id="backends-list">
-          <tr><td colspan="3" style="color: var(--text-dim)">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Inference Stats -->
-    <div class="card" style="margin-top: 16px;">
-      <h3>Inference</h3>
-      <div class="grid grid-2">
-        <div><span class="sub">Speed:</span> <span id="inf-tps">--</span></div>
-        <div><span class="sub">Tokens:</span> <span id="inf-tokens">--</span></div>
+      <!-- Current Model -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Current Model</div>
+        <div id="sidebar-model" style="font-size: 13px; color: var(--text-secondary);">No model loaded</div>
       </div>
-    </div>
+
+      <!-- Quick Stats -->
+      <div class="sidebar-section" style="flex: 1;">
+        <div class="sidebar-section-title">Quick Stats</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+              <span style="color: var(--text-tertiary);">CPU</span>
+              <span id="side-cpu" style="color: var(--accent);">0%</span>
+            </div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="side-cpu-bar" style="width: 0%; background: var(--accent);"></div></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+              <span style="color: var(--text-tertiary);">RAM</span>
+              <span id="side-ram" style="color: var(--green);">0%</span>
+            </div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="side-ram-bar" style="width: 0%; background: var(--green);"></div></div>
+          </div>
+          <div id="side-gpu-section" class="hidden">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+              <span style="color: var(--text-tertiary);">GPU</span>
+              <span id="side-gpu" style="color: var(--yellow);">0%</span>
+            </div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="side-gpu-bar" style="width: 0%; background: var(--yellow);"></div></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+      <div class="main-header">
+        <button class="menu-toggle" onclick="toggleSidebar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h1>System Dashboard</h1>
+      </div>
+
+      <div class="page-body">
+        <div class="page-container">
+
+          <!-- Stat Cards -->
+          <div class="stats-grid">
+            <div class="stat-card stat-cpu">
+              <div class="stat-card-header">
+                <div class="stat-card-label">CPU Usage</div>
+                <div class="stat-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                </div>
+              </div>
+              <div class="stat-card-value" id="cpu-percent">0%</div>
+              <div class="stat-card-sub" id="cpu-cores">-- cores</div>
+              <div class="stat-bar"><div class="stat-bar-fill" id="cpu-bar" style="width: 0%"></div></div>
+            </div>
+
+            <div class="stat-card stat-ram">
+              <div class="stat-card-header">
+                <div class="stat-card-label">RAM Usage</div>
+                <div class="stat-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="6" x2="6" y2="18"/><line x1="10" y1="6" x2="10" y2="18"/><line x1="14" y1="6" x2="14" y2="18"/><line x1="18" y1="6" x2="18" y2="18"/></svg>
+                </div>
+              </div>
+              <div class="stat-card-value" id="ram-value">0 / 0 GB</div>
+              <div class="stat-card-sub" id="ram-percent">0% used</div>
+              <div class="stat-bar"><div class="stat-bar-fill" id="ram-bar" style="width: 0%"></div></div>
+            </div>
+
+            <div class="stat-card stat-gpu hidden" id="gpu-section">
+              <div class="stat-card-header">
+                <div class="stat-card-label">GPU Usage</div>
+                <div class="stat-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+              </div>
+              <div class="stat-card-value" id="gpu-util">0%</div>
+              <div class="stat-card-sub" id="gpu-name">--</div>
+              <div class="stat-bar"><div class="stat-bar-fill" id="gpu-bar" style="width: 0%"></div></div>
+            </div>
+
+            <div class="stat-card stat-vram hidden" id="vram-section">
+              <div class="stat-card-header">
+                <div class="stat-card-label">VRAM Usage</div>
+                <div class="stat-card-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                </div>
+              </div>
+              <div class="stat-card-value" id="vram-value">-- / -- GB</div>
+              <div class="stat-card-sub"><span id="gpu-temp">--</span> | <span id="gpu-power">--</span></div>
+              <div class="stat-bar"><div class="stat-bar-fill" id="vram-bar" style="width: 0%"></div></div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-card-title">CPU History</div>
+              <div class="css-chart chart-cpu" id="chart-cpu"></div>
+              <div class="chart-axis"><span>60s ago</span><span>Now</span></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-title">RAM History</div>
+              <div class="css-chart chart-ram" id="chart-ram"></div>
+              <div class="chart-axis"><span>60s ago</span><span>Now</span></div>
+            </div>
+            <div class="chart-card hidden" id="chart-gpu-card">
+              <div class="chart-card-title">GPU History</div>
+              <div class="css-chart chart-gpu" id="chart-gpu"></div>
+              <div class="chart-axis"><span>60s ago</span><span>Now</span></div>
+            </div>
+            <div class="chart-card hidden" id="chart-vram-card">
+              <div class="chart-card-title">VRAM History</div>
+              <div class="css-chart chart-vram" id="chart-vram"></div>
+              <div class="chart-axis"><span>60s ago</span><span>Now</span></div>
+            </div>
+          </div>
+
+          <!-- Backends -->
+          <div class="card">
+            <div class="card-title">Inference Backends</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Backend</th><th>Version</th><th>Status</th></tr></thead>
+                <tbody id="backends-list">
+                  <tr><td colspan="3" class="text-dim">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Inference Stats -->
+          <div class="card">
+            <div class="card-title">Inference</div>
+            <div class="inference-grid">
+              <div class="inference-item">
+                <div class="inference-label">Speed</div>
+                <div class="inference-value" id="inf-tps">--</div>
+              </div>
+              <div class="inference-item">
+                <div class="inference-label">Tokens Generated</div>
+                <div class="inference-value" id="inf-tokens">--</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script>
+  (function() {
+    // ---- Chart data ----
+    var MAX_POINTS = 60;
+    var chartData = {
+      cpu: [],
+      ram: [],
+      gpu: [],
+      vram: []
+    };
+
+    // Initialize chart bars
+    ['chart-cpu', 'chart-ram', 'chart-gpu', 'chart-vram'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      for (var i = 0; i < MAX_POINTS; i++) {
+        var bar = document.createElement('div');
+        bar.className = 'chart-bar';
+        bar.style.height = '1px';
+        el.appendChild(bar);
+      }
+    });
+
+    function updateChart(chartId, dataKey, value) {
+      chartData[dataKey].push(value);
+      if (chartData[dataKey].length > MAX_POINTS) chartData[dataKey].shift();
+
+      var el = document.getElementById(chartId);
+      if (!el) return;
+      var bars = el.querySelectorAll('.chart-bar');
+      var data = chartData[dataKey];
+      var offset = MAX_POINTS - data.length;
+
+      for (var i = 0; i < MAX_POINTS; i++) {
+        var dataIdx = i - offset;
+        var val = dataIdx >= 0 && dataIdx < data.length ? data[dataIdx] : 0;
+        bars[i].style.height = Math.max(1, val) + '%';
+      }
+    }
+
+    // ---- WebSocket ----
+    var ws = null;
+    function connectMonitor() {
+      var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(protocol + '//' + location.host + '/ws/monitor');
+
+      ws.onmessage = function(event) {
+        try {
+          var data = JSON.parse(event.data);
+          updateStats(data);
+        } catch(e) {}
+      };
+
+      ws.onclose = function() { setTimeout(connectMonitor, 3000); };
+      ws.onerror = function() { ws.close(); };
+    }
+
+    function updateStats(data) {
+      // CPU
+      setText('cpu-percent', data.cpu.percent.toFixed(1) + '%');
+      setBar('cpu-bar', data.cpu.percent);
+      setText('cpu-cores', data.cpu.cores + ' cores');
+      setText('side-cpu', data.cpu.percent.toFixed(0) + '%');
+      setBar('side-cpu-bar', data.cpu.percent);
+      updateChart('chart-cpu', 'cpu', data.cpu.percent);
+
+      // RAM
+      var ramGB = (data.ram.used_mb / 1024).toFixed(1);
+      var ramTotal = (data.ram.total_mb / 1024).toFixed(0);
+      setText('ram-value', ramGB + ' / ' + ramTotal + ' GB');
+      setText('ram-percent', data.ram.percent.toFixed(1) + '% used');
+      setBar('ram-bar', data.ram.percent);
+      setText('side-ram', data.ram.percent.toFixed(0) + '%');
+      setBar('side-ram-bar', data.ram.percent);
+      updateChart('chart-ram', 'ram', data.ram.percent);
+
+      // GPU
+      if (data.gpu && data.gpu.name) {
+        show('gpu-section');
+        show('vram-section');
+        show('chart-gpu-card');
+        show('chart-vram-card');
+        show('side-gpu-section');
+
+        setText('gpu-name', data.gpu.name);
+        setText('gpu-util', data.gpu.util_percent.toFixed(0) + '%');
+        setBar('gpu-bar', data.gpu.util_percent);
+        setText('side-gpu', data.gpu.util_percent.toFixed(0) + '%');
+        setBar('side-gpu-bar', data.gpu.util_percent);
+        updateChart('chart-gpu', 'gpu', data.gpu.util_percent);
+
+        var vramGB = (data.gpu.vram_used_mb / 1024).toFixed(1);
+        var vramTotal = (data.gpu.vram_total_mb / 1024).toFixed(0);
+        setText('vram-value', vramGB + ' / ' + vramTotal + ' GB');
+        setBar('vram-bar', data.gpu.vram_percent);
+        updateChart('chart-vram', 'vram', data.gpu.vram_percent);
+        setText('gpu-temp', data.gpu.temp_c.toFixed(0) + ' C');
+        setText('gpu-power', data.gpu.power_w.toFixed(0) + 'W');
+      }
+
+      // Inference
+      if (data.inference && data.inference.tps > 0) {
+        setText('inf-tps', data.inference.tps.toFixed(1) + ' tok/s');
+        setText('inf-tokens', data.inference.tokens.toLocaleString());
+      }
+    }
+
+    function setText(id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    function setBar(id, percent) {
+      var el = document.getElementById(id);
+      if (el) el.style.width = Math.min(percent, 100) + '%';
+    }
+
+    function show(id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    }
+
+    // ---- Backends ----
+    async function fetchBackends() {
+      try {
+        var resp = await fetch('/v1/backends');
+        var backends = await resp.json();
+        var el = document.getElementById('backends-list');
+        if (!el || !backends.length) return;
+
+        el.innerHTML = backends.map(function(b) {
+          return '<tr>' +
+            '<td style="color: var(--text-primary); font-weight: 500;">' + escapeHtml(b.name) + '</td>' +
+            '<td>' + escapeHtml(b.version || '--') + '</td>' +
+            '<td><span class="badge ' + (b.available ? 'badge-active' : 'badge-inactive') + '">' + (b.available ? 'Available' : 'Offline') + '</span></td>' +
+          '</tr>';
+        }).join('');
+      } catch(e) {}
+    }
+
+    // ---- Current model ----
+    async function fetchCurrentModel() {
+      try {
+        var resp = await fetch('/health');
+        var data = await resp.json();
+        if (data.model) {
+          setText('sidebar-model', data.model + ' (' + (data.backend || 'native') + ')');
+        }
+      } catch(e) {}
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- Sidebar toggle ----
+    window.toggleSidebar = function() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebar-overlay').classList.toggle('visible');
+    };
+
+    // ---- Init ----
+    connectMonitor();
+    fetchBackends();
+    fetchCurrentModel();
+    setInterval(fetchBackends, 30000);
+  })();
+  </script>
 </body>
 </html>

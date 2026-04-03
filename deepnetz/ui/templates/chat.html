@@ -5,77 +5,154 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepNetz Chat</title>
   <link rel="stylesheet" href="/static/style.css">
-  <style>
-    .chat-header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--surface); }
-    .model-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: var(--radius); font-size: 13px; min-width: 250px; }
-    .model-select:focus { border-color: var(--accent); outline: none; }
-    .model-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
-    .config-panel { padding: 8px 16px; border-bottom: 1px solid var(--border); display: none; gap: 16px; flex-wrap: wrap; background: var(--surface); }
-    .config-panel.open { display: flex; }
-    .config-item { display: flex; flex-direction: column; gap: 2px; }
-    .config-item label { font-size: 11px; color: var(--text-dim); }
-    .config-item input { width: 80px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 13px; }
-    .btn-icon { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; padding: 4px 8px; }
-    .btn-icon:hover { color: var(--text); }
-    .chat-info { font-size: 11px; color: var(--text-dim); padding: 4px 16px; text-align: center; }
-  </style>
 </head>
 <body>
-  <nav>
-    <span class="logo">DeepNetz</span>
-    <a href="/">Dashboard</a>
-    <a href="/chat" class="active">Chat</a>
-    <a href="/models">Models</a>
-  </nav>
+  <div class="app-shell">
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-  <!-- Model selector + config -->
-  <div class="chat-header">
-    <select class="model-select" id="model-selector" onchange="switchModel()">
-      <option value="">Loading models...</option>
-    </select>
-    <span class="badge badge-active" id="backend-badge">--</span>
-    <button class="btn-icon" onclick="toggleConfig()" title="Settings">&#9881;</button>
-    <button class="btn-icon" onclick="clearChat()" title="New chat">&#10010;</button>
-    <button class="btn-icon" onclick="exportChat()" title="Export">&#8595;</button>
-  </div>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-icon">DN</div>
+          <div class="sidebar-brand-text">DeepNetz</div>
+        </div>
 
-  <div class="config-panel" id="config-panel">
-    <div class="config-item">
-      <label>Temperature</label>
-      <input type="number" id="cfg-temp" value="0.7" min="0" max="2" step="0.1">
-    </div>
-    <div class="config-item">
-      <label>Top P</label>
-      <input type="number" id="cfg-topp" value="0.9" min="0" max="1" step="0.05">
-    </div>
-    <div class="config-item">
-      <label>Max Tokens</label>
-      <input type="number" id="cfg-tokens" value="512" min="1" max="4096" step="64">
-    </div>
-    <div class="config-item">
-      <label>Repeat Penalty</label>
-      <input type="number" id="cfg-repeat" value="1.1" min="1" max="2" step="0.05">
-    </div>
-  </div>
+        <!-- Model Selector -->
+        <div class="model-selector-wrap">
+          <select class="model-selector" id="model-selector" onchange="switchModel()">
+            <option value="">Loading models...</option>
+          </select>
+          <div class="model-selector-arrow">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+        <div class="model-error" id="model-error"></div>
+        <div class="model-status-badge hidden" id="model-badge">
+          <span class="dot"></span>
+          <span id="model-badge-text">--</span>
+        </div>
+      </div>
 
-  <div class="chat-container">
-    <div class="chat-messages" id="messages">
-      <div class="chat-info">Select a model and start chatting. Models from all backends are available.</div>
-    </div>
-    <div class="chat-input-area">
-      <textarea class="chat-input" id="input" rows="2" placeholder="Type a message... (Enter to send)" disabled></textarea>
-      <button class="btn btn-primary" id="send-btn" onclick="sendMessage()" disabled>Send</button>
-    </div>
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a href="/chat" class="nav-link active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Chat
+        </a>
+        <a href="/models" class="nav-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          Models
+        </a>
+      </nav>
+
+      <!-- Conversations -->
+      <div class="sidebar-section" style="padding-bottom: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="sidebar-section-title">Conversations</div>
+          <button class="btn btn-sm" onclick="newChat()" style="padding: 3px 8px; font-size: 11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New
+          </button>
+        </div>
+      </div>
+      <div class="sidebar-conversations" id="conversation-list">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Settings -->
+      <div class="sidebar-section" style="border-top: 1px solid var(--border); border-bottom: none;">
+        <div class="sidebar-section-title">Settings</div>
+        <div class="settings-group">
+          <div class="setting-item">
+            <label>Temperature <span id="temp-val">0.7</span></label>
+            <input type="range" id="cfg-temp" min="0" max="2" step="0.1" value="0.7" oninput="document.getElementById('temp-val').textContent = this.value">
+          </div>
+          <div class="setting-item">
+            <label>Top P <span id="topp-val">0.9</span></label>
+            <input type="range" id="cfg-topp" min="0" max="1" step="0.05" value="0.9" oninput="document.getElementById('topp-val').textContent = this.value">
+          </div>
+          <div class="setting-item">
+            <label>Max Tokens</label>
+            <input type="number" id="cfg-tokens" value="1024" min="1" max="8192" step="64">
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+      <div class="main-header">
+        <button class="menu-toggle" onclick="toggleSidebar()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h1 id="chat-title">New Chat</h1>
+        <div style="flex:1"></div>
+        <button class="btn btn-sm" onclick="exportChat()" title="Export conversation">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+      </div>
+
+      <div class="chat-area">
+        <div class="chat-messages" id="messages">
+          <div class="chat-welcome" id="welcome-screen">
+            <div class="chat-welcome-icon">DN</div>
+            <h2>DeepNetz Chat</h2>
+            <p>Select a model from the sidebar and start chatting. Your conversations are stored locally in this session.</p>
+          </div>
+        </div>
+
+        <div class="chat-input-wrap">
+          <div class="chat-input-container">
+            <div class="chat-input-box">
+              <textarea class="chat-textarea" id="input" rows="1" placeholder="Send a message..." disabled></textarea>
+              <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled title="Send message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+            <div class="chat-hint">Enter to send, Shift+Enter for new line</div>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
 
   <script>
+  (function() {
+    // ---- State ----
     const messagesEl = document.getElementById('messages');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
-    let conversationHistory = [];
-    let currentModel = '';
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const modelError = document.getElementById('model-error');
+    const modelBadge = document.getElementById('model-badge');
+    const modelBadgeText = document.getElementById('model-badge-text');
 
-    // Load available models into selector
+    let sessions = []; // [{id, title, created_at, updated_at, message_count}] from API
+    let activeSessionId = null;
+    let currentModel = '';
+    let isStreaming = false;
+
+    // ---- Textarea auto-resize ----
+    inputEl.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 180) + 'px';
+    });
+
+    inputEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // ---- Model selector ----
     async function loadModelSelector() {
       try {
         const resp = await fetch('/v1/models');
@@ -88,179 +165,445 @@
           return;
         }
 
-        select.innerHTML = '<option value="">-- Select a model --</option>' +
-          models.map(m => {
-            const size = m.size_mb ? ` (${(m.size_mb/1024).toFixed(1)}GB)` : '';
-            const src = m.backend ? ` [${m.backend}]` : '';
-            return `<option value="${m.path || m.id}" data-backend="${m.backend || 'native'}">${m.id}${size}${src}</option>`;
+        select.innerHTML = '<option value="">Select a model</option>' +
+          models.map(function(m) {
+            var size = m.size_mb ? ' (' + (m.size_mb / 1024).toFixed(1) + ' GB)' : '';
+            var src = m.backend ? ' [' + m.backend + ']' : '';
+            return '<option value="' + escapeAttr(m.path || m.id) + '" data-backend="' + escapeAttr(m.backend || 'native') + '">' + escapeHtml(m.id) + size + src + '</option>';
           }).join('');
 
-        // Check if a model is already loaded
-        const health = await fetch('/health').then(r=>r.json());
-        if (health.model) {
-          currentModel = health.model;
-          document.getElementById('backend-badge').textContent = health.backend;
-          inputEl.disabled = false;
-          sendBtn.disabled = false;
-          // Try to select the current model in dropdown
-          for (let opt of select.options) {
-            if (opt.value && (health.model.includes(opt.text.split(' ')[0]) || opt.value.includes(health.model))) {
-              opt.selected = true;
-              break;
+        // Check currently loaded model
+        try {
+          var health = await fetch('/health').then(function(r) { return r.json(); });
+          if (health.model) {
+            currentModel = health.model;
+            showModelBadge('loaded', health.backend || 'native');
+            enableInput();
+            // Try to select it in dropdown
+            for (var i = 0; i < select.options.length; i++) {
+              var opt = select.options[i];
+              if (opt.value && (health.model.includes(opt.text.split(' ')[0]) || opt.value.includes(health.model))) {
+                opt.selected = true;
+                break;
+              }
             }
           }
-        }
+        } catch(e) {}
       } catch(e) {
-        console.error('Failed to load models:', e);
+        showError('Failed to load model list: ' + e.message);
       }
     }
 
-    async function switchModel() {
-      const select = document.getElementById('model-selector');
-      const path = select.value;
+    window.switchModel = async function() {
+      var select = document.getElementById('model-selector');
+      var path = select.value;
       if (!path) return;
 
-      const backend = select.selectedOptions[0]?.dataset?.backend || 'native';
-      const badge = document.getElementById('backend-badge');
-      badge.textContent = 'loading...';
-      inputEl.disabled = true;
-      sendBtn.disabled = true;
+      var backend = select.selectedOptions[0].dataset.backend || 'native';
+      hideError();
+      showModelBadge('loading', 'Loading...');
+      disableInput();
 
       try {
-        const resp = await fetch('/v1/models/load', {
+        var resp = await fetch('/v1/models/load', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({model: path, backend: backend})
         });
-        const data = await resp.json();
+        var data = await resp.json();
+
         if (data.status === 'ok') {
           currentModel = path;
-          badge.textContent = backend;
-          badge.className = 'badge badge-active';
-          inputEl.disabled = false;
-          sendBtn.disabled = false;
+          showModelBadge('loaded', backend);
+          enableInput();
           inputEl.focus();
-          appendInfo(`Model loaded: ${select.selectedOptions[0]?.text || path}`);
         } else {
-          throw new Error(data.error || 'Failed');
+          throw new Error(data.error || 'Failed to load model');
         }
       } catch(e) {
-        badge.textContent = 'error';
-        badge.className = 'badge badge-inactive';
-        appendInfo(`Error: ${e.message}`);
+        showModelBadge('', '');
+        modelBadge.classList.add('hidden');
+        var msg = e.message || 'Unknown error';
+        if (msg.toLowerCase().includes('memory') || msg.toLowerCase().includes('ram') || msg.toLowerCase().includes('oom')) {
+          showError(msg + '. The model may be too large for your available RAM. Try a smaller quantization or free up memory.');
+        } else {
+          showError('Failed to load model: ' + msg);
+        }
+      }
+    };
+
+    function showError(msg) {
+      modelError.textContent = msg;
+      modelError.classList.add('visible');
+    }
+
+    function hideError() {
+      modelError.textContent = '';
+      modelError.classList.remove('visible');
+    }
+
+    function showModelBadge(state, text) {
+      modelBadge.classList.remove('hidden', 'loaded', 'loading');
+      if (state) {
+        modelBadge.classList.add(state);
+        modelBadgeText.textContent = text;
       }
     }
 
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+    function enableInput() {
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+    }
+
+    function disableInput() {
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+    }
+
+    // ---- Sessions (API-backed) ----
+    async function createSession() {
+      try {
+        var resp = await fetch('/v1/sessions', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({title: ''})});
+        var data = await resp.json();
+        sessions.unshift({id: data.id, title: data.title || 'New Chat', created_at: data.created_at, updated_at: data.created_at, message_count: 0});
+        activeSessionId = data.id;
+        renderConversationList();
+        clearMessagesUI();
+        document.getElementById('chat-title').textContent = 'New Chat';
+        return data.id;
+      } catch(e) {
+        console.error('Failed to create session:', e);
+        return null;
       }
-    });
+    }
 
-    async function sendMessage() {
-      const text = inputEl.value.trim();
-      if (!text || inputEl.disabled) return;
+    async function ensureActiveSession() {
+      if (!activeSessionId) await createSession();
+      return activeSessionId;
+    }
+
+    window.newChat = async function() {
+      await createSession();
+      if (currentModel) enableInput();
+      inputEl.focus();
+    };
+
+    async function switchConversation(id) {
+      activeSessionId = id;
+      renderConversationList();
+      clearMessagesUI();
+      try {
+        var resp = await fetch('/v1/sessions/' + id);
+        if (!resp.ok) return;
+        var data = await resp.json();
+        document.getElementById('chat-title').textContent = data.title || 'New Chat';
+        if (data.messages && data.messages.length > 0) {
+          if (welcomeScreen) welcomeScreen.style.display = 'none';
+          data.messages.forEach(function(m) {
+            renderMessage(m.role, m.content);
+          });
+        }
+      } catch(e) {
+        console.error('Failed to load session:', e);
+      }
+    }
+
+    async function loadSessions() {
+      try {
+        var resp = await fetch('/v1/sessions');
+        var data = await resp.json();
+        sessions = data.sessions || [];
+        renderConversationList();
+      } catch(e) {
+        console.error('Failed to load sessions:', e);
+      }
+    }
+
+    function renderConversationList() {
+      var el = document.getElementById('conversation-list');
+      if (sessions.length === 0) {
+        el.innerHTML = '<div style="padding: 12px; color: var(--text-tertiary); font-size: 12px; text-align: center;">No conversations yet</div>';
+        return;
+      }
+      el.innerHTML = sessions.map(function(s) {
+        var title = s.title || 'New Chat';
+        return '<div class="conversation-item' + (s.id === activeSessionId ? ' active' : '') + '" onclick="window._switchConvo(\'' + s.id + '\')">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+          escapeHtml(title) +
+        '</div>';
+      }).join('');
+    }
+
+    window._switchConvo = function(id) { switchConversation(id); };
+
+    function clearMessagesUI() {
+      var inner = messagesEl.querySelector('.chat-messages-inner');
+      if (inner) inner.remove();
+      if (welcomeScreen) welcomeScreen.style.display = '';
+    }
+
+    // ---- Messages ----
+    function getOrCreateInner() {
+      var inner = messagesEl.querySelector('.chat-messages-inner');
+      if (!inner) {
+        if (welcomeScreen) welcomeScreen.style.display = 'none';
+        inner = document.createElement('div');
+        inner.className = 'chat-messages-inner';
+        messagesEl.appendChild(inner);
+      }
+      return inner;
+    }
+
+    function renderMessage(role, content) {
+      var inner = getOrCreateInner();
+      var div = document.createElement('div');
+      div.className = 'message message-' + role;
+
+      var avatarLabel = role === 'user' ? 'U' : 'DN';
+      div.innerHTML =
+        '<div class="message-avatar">' + avatarLabel + '</div>' +
+        '<div class="message-body"><div class="message-content">' +
+        (role === 'assistant' ? renderMarkdown(content) : escapeHtml(content)) +
+        '</div></div>';
+
+      inner.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function createStreamingMessage() {
+      var inner = getOrCreateInner();
+      var div = document.createElement('div');
+      div.className = 'message message-assistant';
+      div.innerHTML =
+        '<div class="message-avatar">DN</div>' +
+        '<div class="message-body"><div class="message-content">' +
+          '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>' +
+        '</div></div>';
+      inner.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    // ---- Send Message ----
+    window.sendMessage = async function() {
+      var text = inputEl.value.trim();
+      if (!text || inputEl.disabled || isStreaming) return;
       inputEl.value = '';
+      inputEl.style.height = 'auto';
+      isStreaming = true;
+      sendBtn.disabled = true;
 
-      conversationHistory.push({role: 'user', content: text});
-      appendMessage('user', text);
+      // Ensure we have an active session
+      var sessionId = await ensureActiveSession();
+      if (!sessionId) { isStreaming = false; sendBtn.disabled = false; return; }
 
-      const assistantEl = appendMessage('assistant', '');
-      let fullResponse = '';
+      // Find current session entry for sidebar updates
+      var sessionEntry = sessions.find(function(s) { return s.id === sessionId; });
+      var isFirstMessage = sessionEntry && sessionEntry.message_count === 0;
 
-      const temp = parseFloat(document.getElementById('cfg-temp').value) || 0.7;
-      const maxTokens = parseInt(document.getElementById('cfg-tokens').value) || 512;
+      renderMessage('user', text);
+
+      // Build messages array from current chat UI for context
+      var inner = messagesEl.querySelector('.chat-messages-inner');
+      var uiMessages = [];
+      if (inner) {
+        var msgDivs = inner.querySelectorAll('.message');
+        msgDivs.forEach(function(div) {
+          var isUser = div.classList.contains('message-user');
+          var contentEl = div.querySelector('.message-content');
+          if (contentEl && contentEl.textContent) {
+            uiMessages.push({role: isUser ? 'user' : 'assistant', content: contentEl.textContent});
+          }
+        });
+      }
+      // The last user message is the one we just rendered, make sure it's included
+      if (uiMessages.length === 0 || uiMessages[uiMessages.length - 1].content !== text) {
+        uiMessages.push({role: 'user', content: text});
+      }
+
+      var streamDiv = createStreamingMessage();
+      var contentEl = streamDiv.querySelector('.message-content');
+      var fullResponse = '';
+
+      var temp = parseFloat(document.getElementById('cfg-temp').value) || 0.7;
+      var topP = parseFloat(document.getElementById('cfg-topp').value) || 0.9;
+      var maxTokens = parseInt(document.getElementById('cfg-tokens').value) || 1024;
 
       try {
-        const response = await fetch('/v1/chat/completions', {
+        var response = await fetch('/v1/chat/completions', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             model: 'deepnetz',
-            messages: conversationHistory,
+            messages: uiMessages,
             stream: true,
             max_tokens: maxTokens,
             temperature: temp,
-          }),
+            top_p: topP,
+            session_id: sessionId
+          })
         });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+        if (!response.ok) {
+          var errData = {};
+          try { errData = await response.json(); } catch(e) {}
+          var errMsg = (errData.error && errData.error.message) ? errData.error.message : (errData.error || 'Server error (' + response.status + ')');
+          throw new Error(errMsg);
+        }
+
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
 
         while (true) {
-          const {done, value} = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, {stream: true});
-          const lines = buffer.split('\n');
+          var result = await reader.read();
+          if (result.done) break;
+          buffer += decoder.decode(result.value, {stream: true});
+          var lines = buffer.split('\n');
           buffer = lines.pop() || '';
-          for (const line of lines) {
+
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
             if (line.startsWith('data: ') && line !== 'data: [DONE]') {
               try {
-                const chunk = JSON.parse(line.slice(6));
-                const content = chunk.choices?.[0]?.delta?.content || '';
+                var chunk = JSON.parse(line.slice(6));
+                var content = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) ? chunk.choices[0].delta.content || '' : '';
                 if (content) {
                   fullResponse += content;
-                  assistantEl.querySelector('.msg-content').textContent = fullResponse;
+                  contentEl.innerHTML = renderMarkdown(fullResponse);
                   messagesEl.scrollTop = messagesEl.scrollHeight;
                 }
               } catch(e) {}
             }
           }
         }
-        conversationHistory.push({role: 'assistant', content: fullResponse});
+
+        if (!fullResponse) {
+          contentEl.innerHTML = '<span class="text-dim">No response received.</span>';
+        }
+
+        // Update sidebar title after first message (server auto-titles, refresh sidebar)
+        if (isFirstMessage) {
+          var title = text.length > 40 ? text.slice(0, 40) + '...' : text;
+          document.getElementById('chat-title').textContent = title;
+          if (sessionEntry) {
+            sessionEntry.title = title;
+            sessionEntry.message_count = 2; // user + assistant
+          }
+          renderConversationList();
+        } else if (sessionEntry) {
+          sessionEntry.message_count += 2;
+        }
       } catch(e) {
-        assistantEl.querySelector('.msg-content').textContent = `Error: ${e.message}`;
+        contentEl.innerHTML = '<span class="text-red">Error: ' + escapeHtml(e.message) + '</span>';
       }
-    }
 
-    function appendMessage(role, content) {
-      // Remove info messages
-      messagesEl.querySelectorAll('.chat-info').forEach(el => el.remove());
-      const div = document.createElement('div');
-      div.className = `msg msg-${role}`;
-      div.innerHTML = `<div class="msg-content">${escapeHtml(content)}</div>`;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-      return div;
-    }
+      isStreaming = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    };
 
-    function appendInfo(text) {
-      const div = document.createElement('div');
-      div.className = 'chat-info';
-      div.textContent = text;
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    // ---- Export ----
+    window.exportChat = async function() {
+      if (!activeSessionId) return;
+      try {
+        var resp = await fetch('/v1/sessions/' + activeSessionId);
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (!data.messages || data.messages.length === 0) return;
+        var text = data.messages.map(function(m) {
+          return (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + m.content;
+        }).join('\n\n---\n\n');
+        var blob = new Blob([text], {type: 'text/plain'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'deepnetz-chat-' + Date.now() + '.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch(e) {
+        console.error('Failed to export:', e);
+      }
+    };
+
+    // ---- Sidebar toggle (mobile) ----
+    window.toggleSidebar = function() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebar-overlay').classList.toggle('visible');
+    };
+
+    // ---- Markdown renderer (lightweight, no deps) ----
+    function renderMarkdown(text) {
+      if (!text) return '';
+      var html = escapeHtml(text);
+
+      // Code blocks (```lang\n...\n```)
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
+        return '<pre><code>' + code.trim() + '</code></pre>';
+      });
+
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      // Italic
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      // Headers
+      html = html.replace(/^### (.+)$/gm, '<strong style="font-size: 15px;">$1</strong>');
+      html = html.replace(/^## (.+)$/gm, '<strong style="font-size: 16px;">$1</strong>');
+      html = html.replace(/^# (.+)$/gm, '<strong style="font-size: 18px;">$1</strong>');
+
+      // Unordered lists
+      html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+      // Ordered lists
+      html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+      // Blockquotes
+      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+      // Paragraphs: turn double newlines into paragraph breaks
+      html = html.replace(/\n\n/g, '</p><p>');
+      html = html.replace(/\n/g, '<br>');
+      html = '<p>' + html + '</p>';
+
+      // Clean up empty tags
+      html = html.replace(/<p><\/p>/g, '');
+      html = html.replace(/<p>(<pre>)/g, '$1');
+      html = html.replace(/(<\/pre>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<ul>)/g, '$1');
+      html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<blockquote>)/g, '$1');
+      html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+
+      return html;
     }
 
     function escapeHtml(text) {
-      const div = document.createElement('div');
+      var div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
     }
 
-    function toggleConfig() {
-      document.getElementById('config-panel').classList.toggle('open');
+    function escapeAttr(text) {
+      return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function clearChat() {
-      conversationHistory = [];
-      messagesEl.innerHTML = '<div class="chat-info">Chat cleared. Start a new conversation.</div>';
-    }
-
-    function exportChat() {
-      const text = conversationHistory.map(m =>
-        `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`
-      ).join('\n\n');
-      const blob = new Blob([text], {type: 'text/plain'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `deepnetz-chat-${Date.now()}.txt`;
-      a.click();
-    }
-
+    // ---- Init ----
+    loadSessions().then(function() {
+      if (sessions.length === 0) {
+        createSession();
+      } else {
+        // Activate the most recent session
+        switchConversation(sessions[0].id);
+      }
+    });
     loadModelSelector();
+  })();
   </script>
 </body>
 </html>

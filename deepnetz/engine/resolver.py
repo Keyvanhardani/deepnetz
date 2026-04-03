@@ -49,21 +49,36 @@ def resolve_model(model_ref: str, output_dir: str = ".") -> str:
         if protocol in resolvers:
             return resolvers[protocol](path)
         else:
-            raise ValueError(f"Unknown protocol: {protocol}")
+            raise ValueError(f"Unbekanntes Protokoll: {protocol}")
+
+    # Check DeepNetz local model store first
+    from deepnetz.engine.downloader import resolve_local_model
+    local = resolve_local_model(model_ref)
+    if local:
+        return local
 
     # Try to find in common locations
     found = _search_local(model_ref)
     if found:
         return found
 
-    # Last resort: try as HuggingFace search
+    # Auto-pull: try to download from catalog or HuggingFace
+    from deepnetz.engine.downloader import _find_in_catalog, pull_model
+    entry = _find_in_catalog(model_ref)
+    if entry:
+        print(f"  Modell '{model_ref}' nicht lokal — wird heruntergeladen...")
+        path = pull_model(model_ref)
+        if path and os.path.exists(path):
+            return path
+
     raise FileNotFoundError(
-        f"Model not found: {model_ref}\n\n"
-        f"Try one of:\n"
-        f"  deepnetz run ./path/to/model.gguf\n"
-        f"  deepnetz run hf://user/repo/file.gguf\n"
-        f"  deepnetz run ollama://qwen3.5:35b\n"
-        f"  deepnetz download {model_ref}\n"
+        f"Modell nicht gefunden: {model_ref}\n\n"
+        f"Optionen:\n"
+        f"  deepnetz pull {model_ref}        Herunterladen\n"
+        f"  deepnetz list --catalog          Verfügbare Modelle\n"
+        f"  deepnetz run ./pfad/model.gguf   Lokale Datei\n"
+        f"  deepnetz run hf://user/repo      Von HuggingFace\n"
+        f"  deepnetz run ollama://name       Von Ollama\n"
     )
 
 

@@ -11,6 +11,10 @@ https://github.com/Keyvanhardani/deepnetz
 __version__ = "1.0.4"
 __author__ = "Keyvan Hardani"
 
-from deepnetz.engine.model import Model
+def __getattr__(name):
+    if name == "Model":
+        from deepnetz.engine.model import Model
+        return Model
+    raise AttributeError(f"module 'deepnetz' has no attribute {name}")
 
 __all__ = ["Model"]

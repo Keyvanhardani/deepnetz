@@ -111,9 +111,119 @@ def cmd_serve(args):
     uvicorn.run(app, host=args.host, port=args.port)
 
 
+def cmd_register(args):
+    from deepnetz.registry.client import RegistryClient
+    import getpass
+    client = RegistryClient()
+
+    username = args.username or input("  Username: ").strip()
+    password = getpass.getpass("  Passwort: ")
+
+    try:
+        result = client.register(username, password)
+        print(f"\n  Registriert als: {result.get('username')}")
+        print(f"  API-Key: {result.get('api_key')}")
+        print(f"  Gespeichert in: ~/.config/deepnetz/credentials.json\n")
+    except RuntimeError as e:
+        print(f"\n  Fehler: {e}\n")
+
+
+def cmd_login(args):
+    from deepnetz.registry.client import RegistryClient
+    import getpass
+    client = RegistryClient()
+
+    username = args.username or input("  Username: ").strip()
+    password = getpass.getpass("  Passwort: ")
+
+    try:
+        result = client.login(username, password)
+        print(f"\n  Eingeloggt als: {result.get('username')}")
+        print(f"  API-Key gespeichert.\n")
+    except RuntimeError as e:
+        print(f"\n  Fehler: {e}\n")
+
+
+def cmd_search(args):
+    from deepnetz.registry.client import RegistryClient
+    client = RegistryClient()
+
+    if not client.is_authenticated:
+        print(f"\n  Bitte zuerst einloggen: deepnetz login\n")
+        return
+
+    try:
+        results = client.search(args.query, limit=args.limit)
+    except RuntimeError as e:
+        print(f"\n  Fehler: {e}\n")
+        return
+
+    if not results:
+        print(f"\n  Keine Ergebnisse für '{args.query}'.\n")
+        return
+
+    print(f"\n  Suchergebnisse für '{args.query}' ({len(results)} Treffer)")
+    print(f"  {'─' * 60}")
+    for m in results:
+        repo = m.get("repo", "")
+        dl = m.get("downloads", 0)
+        dl_str = f"{dl // 1000}k" if dl > 1000 else str(dl)
+        print(f"  {repo:<45} {dl_str:>8} Downloads")
+    print(f"\n  Pull: deepnetz pull <repo>\n")
+
+
+def cmd_pull(args):
+    from deepnetz.engine.downloader import pull_model
+    from deepnetz.registry.client import RegistryClient
+
+    # Log pull to registry
+    try:
+        client = RegistryClient()
+        if client.is_authenticated:
+            client.log_pull(args.model, quant=args.quant)
+    except Exception:
+        pass
+
+    pull_model(args.model, quant=args.quant)
+
+
+def cmd_list(args):
+    from deepnetz.engine.downloader import list_local_models
+
+    models = list_local_models()
+    if not models:
+        print(f"\n  Keine lokalen Modelle.")
+        print(f"  Suche:  deepnetz search Qwen")
+        print(f"  Pull:   deepnetz pull Qwen3.5-35B\n")
+        return
+
+    print(f"\n  DeepNetz Modelle ({len(models)} lokal)")
+    print(f"  {'─' * 55}")
+    for m in models:
+        name = m.get("name", "?")
+        quant = m.get("quant", "?")
+        size = m.get("size", 0)
+        size_mb = size / (1024 * 1024) if size > 1024 * 1024 else size
+        size_str = f"{size_mb / 1024:.1f} GB" if size_mb > 1024 else f"{size_mb:.0f} MB"
+        status = "✓" if m.get("available") else "✗"
+        print(f"  {status} {name:<22} {quant:<10} {size_str}")
+    print(f"\n  Run: deepnetz run <name>\n")
+
+
+def cmd_registry(args):
+    from deepnetz.registry.server import create_registry_app
+    import uvicorn
+
+    app = create_registry_app()
+    print(f"\n  DeepNetz Registry Server")
+    print(f"  http://0.0.0.0:{args.port}/v1/search?q=Qwen")
+    print(f"  http://0.0.0.0:{args.port}/docs\n")
+    uvicorn.run(app, host="0.0.0.0", port=args.port)
+
+
 def cmd_download(args):
-    from deepnetz.engine.downloader import download_model
-    download_model(args.model, quant=args.quant, output_dir=args.output)
+    from deepnetz.engine.downloader import pull_model
+    pull_model(args.model, quant=args.quant)
 
 
 def _parse_context(ctx_str: str) -> int:
@@ -171,11 +281,35 @@ def main():
     p_serve.add_argument("--backend", default="auto", help="Force backend")
     p_serve.add_argument("--cpu", action="store_true")
 
-    # download
-    p_dl = subparsers.add_parser("download", help="Download model from HuggingFace")
-    p_dl.add_argument("model", help="Model name (e.g., Qwen3.5-35B-A3B)")
-    p_dl.add_argument("--quant", default="Q4_K_M", help="Quantization type")
-    p_dl.add_argument("--output", default=".", help="Output directory")
+    # register
+    p_reg_user = subparsers.add_parser("register", help="Account erstellen auf registry.deepnetz.com")
+    p_reg_user.add_argument("--username", default="", help="Username")
+
+    # login
+    p_login = subparsers.add_parser("login", help="Einloggen bei registry.deepnetz.com")
+    p_login.add_argument("--username", default="", help="Username")
+
+    # search
+    p_search = subparsers.add_parser("search", help="Modelle suchen (über Registry)")
+    p_search.add_argument("query", help="Suchbegriff (z.B. Qwen, Llama, code)")
+    p_search.add_argument("--limit", type=int, default=15, help="Max Ergebnisse")
+
+    # pull
+    p_pull = subparsers.add_parser("pull", help="Modell herunterladen")
+    p_pull.add_argument("model", help="Modellname oder HF Repo (z.B. Qwen3.5-35B)")
+    p_pull.add_argument("--quant", default="auto", help="Quantisierung (auto, Q4_K_M, Q8_0, ...)")
+
+    # list
+    p_list = subparsers.add_parser("list", help="Lokale Modelle anzeigen")
+
+    # registry (server)
+    p_reg = subparsers.add_parser("registry", help="Registry Server starten")
+    p_reg.add_argument("--port", type=int, default=8090, help="Port (Standard: 8090)")
+
+    # download (legacy)
+    p_dl = subparsers.add_parser("download", help="Modell herunterladen (Alias für pull)")
+    p_dl.add_argument("model", help="Modellname")
+    p_dl.add_argument("--quant", default="auto", help="Quantisierung")
 
     args = parser.parse_args()
 
@@ -185,6 +319,12 @@ def main():
         "info": cmd_info,
         "run": cmd_run,
         "serve": cmd_serve,
+        "register": cmd_register,
+        "login": cmd_login,
+        "search": cmd_search,
+        "pull": cmd_pull,
+        "list": cmd_list,
+        "registry": cmd_registry,
         "download": cmd_download,
     }
 

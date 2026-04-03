@@ -2,62 +2,85 @@
 
 **Run massive models on minimal hardware.**
 
+[![PyPI](https://img.shields.io/pypi/v/deepnetz)](https://pypi.org/project/deepnetz/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-21%20passed-green)]()
+
 ```bash
 pip install deepnetz
 
-deepnetz run model.gguf                         # auto-detect hardware
-deepnetz run model.gguf --cpu                    # CPU-only
-deepnetz run model.gguf --gpu 8GB                # GPU with budget
-deepnetz run ollama://qwen3.5:35b                # from Ollama
-deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF  # from HuggingFace
-deepnetz run lmstudio://qwen3.5-35b             # from LM Studio
-deepnetz serve model.gguf --port 8080            # OpenAI-compatible API
+deepnetz pull Qwen3.5-35B                       # download from HuggingFace
+deepnetz run Qwen3.5-35B                        # auto-detect hardware, run
+deepnetz serve Qwen3.5-35B --port 8080          # OpenAI-compatible API + Web UI
 ```
+
+Web App: [deepnetz.com/app](https://deepnetz.com/app) | Docs: [deepnetz.com](https://deepnetz.com)
 
 ## What it does
 
 One framework. 6 backends. Any model. Any hardware.
 
-| You have | Typical setup | With DeepNetz optimization |
-|----------|--------------|---------------------------|
+| You have | Typical setup | With DeepNetz |
+|----------|--------------|---------------|
 | RTX 4060 8GB + 32GB RAM | 35B model via Ollama | Same model, 3.6x less KV cache, longer context |
 | 32GB RAM, no GPU | 7B model, slow | Auto-optimized CPU inference + KV compression |
-| RTX 3090 24GB + 64GB RAM | 70B model | Same model, optimized layer split + cache |
+| RTX 3090 24GB + 64GB RAM | 70B model | Optimized layer split + cache |
 
-## Quick start
+## Quick Start
 
 ```bash
 pip install deepnetz
 
-# Show your hardware + available backends
+# Search & download models
+deepnetz search Qwen                            # search HuggingFace
+deepnetz pull Qwen3.5-35B                       # download best quant for your hardware
+deepnetz pull Qwen3.5-35B --quant Q8_0          # specific quantization
+deepnetz list                                    # show local models
+
+# Run
+deepnetz run Qwen3.5-35B                        # from local store
+deepnetz run ./model.gguf                        # local file
+deepnetz run ollama://qwen3.5:35b               # from Ollama
+deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF  # from HuggingFace
+deepnetz run lmstudio://qwen3.5-35b             # from LM Studio
+
+# Options
+deepnetz run model.gguf --cpu                    # CPU-only
+deepnetz run model.gguf --gpu 8GB --context 32k  # GPU budget + context
+deepnetz run model.gguf -p "Explain gravity"     # single prompt
+
+# API server + Web UI
+deepnetz serve model.gguf --port 8080
+# Web UI:  https://deepnetz.com/app  (connects to localhost)
+# API:     http://localhost:8080/v1/chat/completions
+# Docs:    http://localhost:8080/docs
+
+# Hardware info
 deepnetz hardware
 deepnetz backends
-
-# Run a model (auto-detects everything)
-deepnetz run ./model.gguf
-
-# Load from anywhere
-deepnetz run ollama://qwen3.5:35b
-deepnetz run hf://unsloth/Qwen3.5-35B-A3B-GGUF
-deepnetz run lmstudio://qwen3.5-35b
-
-# CPU-only / GPU budget
-deepnetz run model.gguf --cpu
-deepnetz run model.gguf --gpu 8GB --context 32k
-
-# Single prompt
-deepnetz run model.gguf -p "Explain gravity"
-
-# API server with Web UI
-deepnetz serve model.gguf --port 8080
-# Dashboard: http://localhost:8080/
-# Chat:      http://localhost:8080/chat
-# Models:    http://localhost:8080/models
-# API:       http://localhost:8080/v1/chat/completions
-
-# Download models
-deepnetz download Qwen3.5-35B --quant Q4_K_M
 ```
+
+## Registry
+
+DeepNetz has its own model registry at `registry.deepnetz.com`. Search and pull any GGUF model from HuggingFace through our server.
+
+```bash
+# Register & login (one time)
+deepnetz register
+deepnetz login
+
+# Search models (via registry server → HuggingFace)
+deepnetz search Qwen
+deepnetz search "code llama"
+deepnetz search deepseek
+
+# Pull (auto-selects best quant for your hardware)
+deepnetz pull Qwen3.5-35B
+deepnetz pull Llama-3.3-70B --quant IQ2_M
+deepnetz pull unsloth/Qwen3.5-35B-A3B-GGUF      # direct HF repo
+```
+
+Models are stored in `~/.cache/deepnetz/registry/blobs/` as content-addressed files.
 
 ## Python API
 
@@ -68,15 +91,15 @@ from deepnetz import Model
 model = Model("model.gguf")
 response = model.chat("Hello!")
 
-# CPU-only
-model = Model("model.gguf", cpu_only=True)
-
-# Specific backend
-model = Model("model.gguf", backend="ollama")
-
 # Streaming
 for token in model.stream("Tell me a story"):
     print(token, end="", flush=True)
+
+# Specific backend
+model = Model("ollama://qwen3.5:35b")
+
+# CPU-only with budget
+model = Model("model.gguf", cpu_only=True, target_context=8192)
 ```
 
 ## 6 Backends
@@ -87,26 +110,14 @@ DeepNetz auto-detects which backends are installed and uses the best one:
 |---------|--------|----------------|
 | **Native** | llama-cpp-python | Direct GGUF inference (fastest) |
 | **Ollama** | Ollama REST API | `localhost:11434` |
-| **vLLM** | vLLM Python/CLI | `vllm serve` or running instance |
-| **LM Studio** | lms CLI / REST | `localhost:1234` |
-| **HuggingFace** | transformers | Pipeline (safetensors only) |
+| **vLLM** | vLLM server | `vllm serve` |
+| **LM Studio** | LM Studio API | `localhost:1234` |
+| **HuggingFace** | transformers | Pipeline (safetensors) |
 | **Remote** | Any OpenAI API | Custom endpoint |
-
-```bash
-deepnetz backends   # shows what's available on your system
-```
 
 ## KV Cache Optimization
 
-DeepNetz stacks compression techniques for up to 10x memory reduction:
-
-```
-122B model, 32K context:
-  KV Cache (naive):        ~16 GB → doesn't fit
-  + TurboQuant (3.6x):       4.4 GB
-  + Token Eviction (2x):     2.2 GB
-  + KV Merging (1.5x):       1.5 GB → fits!
-```
+Up to 10x memory reduction through stacked compression:
 
 | Technique | Based on | Effect |
 |-----------|----------|--------|
@@ -117,28 +128,20 @@ DeepNetz stacks compression techniques for up to 10x memory reduction:
 
 ## Web UI
 
-`deepnetz serve model.gguf` starts a web dashboard at `http://localhost:8080/`:
+Start the server and open [deepnetz.com/app](https://deepnetz.com/app) — it connects to your local instance:
 
-- **Dashboard** — Live CPU, RAM, GPU, VRAM, temperature monitoring
-- **Chat** — Streaming chat interface
-- **Models** — Browse and manage models from all backends
-
-## Tool Calling
-
-Built-in internet search, extensible tool framework:
-
-```python
-from deepnetz.tools.registry import ToolRegistry
-
-registry = ToolRegistry()  # web_search built-in
-result = registry.execute("web_search", {"query": "latest news"})
+```bash
+deepnetz serve model.gguf --port 8080
+# Open https://deepnetz.com/app → Connect to localhost:8080
 ```
 
-OpenAI-compatible function calling via `/v1/chat/completions`.
+Features: Chat with streaming, model search & pull, model switching, system monitor, settings.
+
+Or use the built-in UI at `http://localhost:8080/chat`.
 
 ## Benchmarks
 
-Tested on 9 models from 3B to 122B on RTX 4060 (8GB) + 32GB RAM:
+Tested on RTX 4060 (8GB) + 32GB RAM:
 
 | Model | PPL Delta | Speed | KV Compression |
 |-------|-----------|-------|---------------|
@@ -152,45 +155,37 @@ Tested on 9 models from 3B to 122B on RTX 4060 (8GB) + 32GB RAM:
 
 ```
 deepnetz/
-├── __init__.py                  # from deepnetz import Model
-├── cli.py                       # CLI (run/serve/info/hardware/backends/download)
-├── server.py                    # FastAPI + WebSocket + OpenAI API
-├── errors.py                    # Error hierarchy
+├── cli.py                       # CLI (run/serve/pull/search/list/register/login)
+├── server.py                    # FastAPI + OpenAI API + WebSocket
 ├── engine/
 │   ├── model.py                 # Main orchestrator
+│   ├── manager.py               # Model lifecycle (load/unload/switch)
 │   ├── hardware.py              # GPU/CPU/RAM detection
 │   ├── monitor.py               # Real-time system stats
 │   ├── planner.py               # Budget → inference plan
-│   ├── gguf_reader.py           # GGUF metadata extraction
-│   ├── resolver.py              # Universal model resolver (8 sources)
-│   ├── downloader.py            # HuggingFace download
-│   ├── scanner.py               # Local model discovery
 │   ├── session.py               # SQLite conversation persistence
+│   ├── resolver.py              # Universal model resolver (8 sources)
+│   ├── downloader.py            # Model download wrapper
+│   ├── gguf_reader.py           # GGUF metadata extraction
+│   ├── scanner.py               # Local model discovery
 │   └── evaluator.py             # Output quality scoring
-├── backends/
-│   ├── base.py                  # Adapter interface
-│   ├── native.py                # llama-cpp-python
-│   ├── ollama.py                # Ollama REST API
-│   ├── vllm.py                  # vLLM
-│   ├── lmstudio.py              # LM Studio
-│   ├── huggingface.py           # transformers
-│   ├── remote.py                # Any OpenAI API
+├── registry/
+│   ├── store.py                 # Local blob store + HF pull
+│   ├── client.py                # Registry server client (auth, search)
+│   ├── server.py                # Registry server (deploy on your infra)
+│   └── config.py                # Model config format
+├── backends/                    # 6 pluggable adapters
+│   ├── native.py, ollama.py, vllm.py
+│   ├── lmstudio.py, huggingface.py, remote.py
 │   └── discovery.py             # Auto-detect backends
-├── cache/
-│   ├── turboquant.py            # TurboQuant KV compression
-│   ├── eviction.py              # Attention sink eviction
-│   └── merging.py               # KV entry merging
-├── tools/
-│   ├── base.py                  # Tool protocol
-│   ├── search.py                # Web search (DuckDuckGo)
-│   └── registry.py              # Tool management + parser
-└── ui/
-    ├── routes.py                # Web UI routes
-    ├── static/                  # JS, CSS
-    └── templates/               # Dashboard, Chat, Models HTML
+├── cache/                       # KV cache optimization
+│   ├── turboquant.py, eviction.py, merging.py
+├── tools/                       # Tool calling
+│   ├── search.py, registry.py, base.py
+└── ui/                          # Web UI templates
 ```
 
-## What makes it different
+## Comparison
 
 | Feature | Ollama | LM Studio | vLLM | **DeepNetz** |
 |---------|--------|-----------|------|-------------|
@@ -198,18 +193,11 @@ deepnetz/
 | KV Cache Compression | No | No | No | **TurboQuant 3.6x** |
 | Multi-Backend | No | No | No | **6 backends** |
 | Hardware Auto-Tuning | Basic | Basic | No | **Budget planner** |
-| Web UI + Monitoring | No | Yes (closed) | No | **Yes** |
+| Web UI | No | Yes (closed) | No | **Yes (open)** |
+| Model Registry | Proprietary | No | No | **Own + HuggingFace** |
 | Tool Calling | No | No | Yes | **Yes + Search** |
-| CPU Optimized | Yes | Yes | No | **Yes + KV compression** |
-| Quality Scoring | No | No | No | **Yes** |
-
-## Author
-
-**Keyvan Hardani** — [keyvan.ai](https://keyvan.ai) | [deepnetz.com](https://deepnetz.com) | [GitHub](https://github.com/Keyvanhardani) | [LinkedIn](https://linkedin.com/in/keyvanhardani)
 
 ## Contributing
-
-PRs welcome! See [open issues](https://github.com/Keyvanhardani/deepnetz/issues).
 
 ```bash
 git clone https://github.com/Keyvanhardani/deepnetz.git
@@ -220,4 +208,4 @@ pytest tests/
 
 ## License
 
-MIT — use it, fork it, build on it.
+MIT

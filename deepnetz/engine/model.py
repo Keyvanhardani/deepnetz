@@ -70,9 +70,29 @@ class Model:
             if not self.backend:
                 raise RuntimeError("No inference backend available. Install llama-cpp-python or Ollama.")
 
-        # Resolve model path (for native backend)
+        # Resolve model path — handle protocol URLs for ALL backends
         self.model_path = model_ref
-        if self.backend.name == "native" and not model_ref.startswith(("ollama://", "http")):
+        if "://" in model_ref:
+            protocol, path = model_ref.split("://", 1)
+            if self.backend.name == "native":
+                # Native backend needs a local file path — resolve via resolver
+                from deepnetz.engine.resolver import resolve_model
+                try:
+                    self.model_path = resolve_model(model_ref)
+                except (FileNotFoundError, ValueError, ImportError) as e:
+                    raise RuntimeError(
+                        f"Cannot resolve '{model_ref}' for native backend: {e}\n\n"
+                        f"Hints:\n"
+                        f"  ollama://  → Make sure Ollama is running (ollama serve)\n"
+                        f"  hf://      → pip install huggingface_hub\n"
+                        f"  Or use a local file: deepnetz run /path/to/model.gguf"
+                    )
+            else:
+                # Non-native backends: strip protocol prefix
+                # e.g. ollama://qwen3.5:35b → qwen3.5:35b
+                self.model_path = path
+        elif self.backend.name == "native":
+            # No protocol — try to resolve local path
             from deepnetz.engine.resolver import resolve_model
             try:
                 self.model_path = resolve_model(model_ref)
@@ -115,7 +135,7 @@ class Model:
                 kv_type_v=self.plan.kv_type_v,
             )
         else:
-            self.backend.load(self.model_ref)
+            self.backend.load(self.model_path)
         return self
 
     def chat(self, prompt: str, max_tokens: int = 512,
