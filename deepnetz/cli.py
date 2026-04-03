@@ -349,6 +349,26 @@ def cmd_registry(args):
     uvicorn.run(app, host="0.0.0.0", port=args.port)
 
 
+def cmd_optimize(args):
+    from deepnetz.engine.optimize import install_ik_llama, analyze_model, print_analysis
+
+    if getattr(args, 'install_ik_llama', False):
+        install_ik_llama(cuda=not getattr(args, 'cpu', False))
+        return
+
+    if hasattr(args, 'model') and args.model:
+        from deepnetz.engine.resolver import resolve_model
+        try:
+            path = resolve_model(args.model)
+        except FileNotFoundError:
+            path = args.model
+        report = analyze_model(path)
+        print_analysis(report)
+    else:
+        print("\n  deepnetz optimize <model>          Analyse + Empfehlungen")
+        print("  deepnetz optimize --install-ik-llama  Schnellere CUDA Kernels\n")
+
+
 def cmd_convert(args):
     from deepnetz.engine.converter import convert_model
     convert_model(args.source, output_dir=args.output, quant=args.quant)
@@ -404,6 +424,7 @@ def main():
     p_run.add_argument("--stream", action="store_true", default=True, help="Stream output")
     p_run.add_argument("--image", help="Image path for vision models")
     p_run.add_argument("--reasoning", action="store_true", help="Enable reasoning mode")
+    p_run.add_argument("--draft", help="Draft model for speculative decoding (e.g. small 3B model)")
 
     # serve
     p_serve = subparsers.add_parser("serve", help="Start OpenAI-compatible API server")
@@ -442,6 +463,12 @@ def main():
     p_reg = subparsers.add_parser("registry", help="Registry Server starten")
     p_reg.add_argument("--port", type=int, default=8090, help="Port (Standard: 8090)")
 
+    # optimize
+    p_opt = subparsers.add_parser("optimize", help="Modell analysieren + Optimierungen empfehlen")
+    p_opt.add_argument("model", nargs="?", help="Modell zum Analysieren")
+    p_opt.add_argument("--install-ik-llama", action="store_true", help="ik_llama.cpp installieren (1.3-1.5x schneller)")
+    p_opt.add_argument("--cpu", action="store_true", help="Ohne CUDA kompilieren")
+
     # convert
     p_conv = subparsers.add_parser("convert", help="Modell konvertieren (HF → GGUF)")
     p_conv.add_argument("source", help="Quelle (HF Repo oder lokales Verzeichnis)")
@@ -467,6 +494,7 @@ def main():
         "pull": cmd_pull,
         "list": cmd_list,
         "registry": cmd_registry,
+        "optimize": cmd_optimize,
         "convert": cmd_convert,
         "download": cmd_download,
     }

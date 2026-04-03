@@ -172,6 +172,24 @@ class NativeBackend(BackendAdapter):
             if content:
                 yield content
 
+    def stream_speculative(self, draft_backend, messages: List[Dict[str, str]],
+                           config: Optional[GenerationConfig] = None,
+                           k: int = 5) -> Generator[str, None, None]:
+        """Stream with speculative decoding using a draft model."""
+        if not self._llm:
+            raise RuntimeError("No model loaded")
+        cfg = config or GenerationConfig()
+
+        from deepnetz.engine.speculative import speculative_generate_from_backends
+        yield from speculative_generate_from_backends(
+            target_backend=self,
+            draft_backend=draft_backend,
+            messages=messages,
+            max_tokens=cfg.max_tokens,
+            k=k,
+            temperature=cfg.temperature,
+        )
+
     def unload(self) -> None:
         if self._llm:
             del self._llm
