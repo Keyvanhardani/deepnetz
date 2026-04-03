@@ -171,14 +171,20 @@ def create_app(model_path: str,
 
     @app.post("/v1/models/load")
     async def load_model_endpoint(req: LoadRequest):
+        import asyncio
+        app.state.loading = True
         try:
-            app.state.manager.load_model(req.model, req.backend)
+            # Run in thread so it doesn't block health checks
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, app.state.manager.load_model, req.model, req.backend)
             return {"status": "ok", "model": req.model}
         except Exception as e:
             return JSONResponse(
                 status_code=500,
                 content={"status": "error", "error": str(e)},
             )
+        finally:
+            app.state.loading = False
 
     @app.post("/v1/models/download")
     async def download_model_endpoint(req: DownloadRequest):
@@ -189,13 +195,18 @@ def create_app(model_path: str,
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
+    app.state.loading = False
+
     @app.get("/health")
     async def health():
         mgr = app.state.manager
         model = mgr.get_active()
         backend_name = model.backend.name if model else "none"
-        return {"status": "ok", "backend": backend_name,
-                "model": mgr.model_ref}
+        loading = getattr(app.state, 'loading', False)
+        return {"status": "loading" if loading else "ok",
+                "backend": backend_name,
+                "model": mgr.model_ref,
+                "loading": loading}
 
     # ---- Session management ----
     from deepnetz.engine.session import SessionStore

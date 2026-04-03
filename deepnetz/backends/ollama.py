@@ -148,17 +148,20 @@ class OllamaBackend(BackendAdapter):
             headers={"Content-Type": "application/json"}
         )
         try:
-            resp = urllib.request.urlopen(req, timeout=120)
+            resp = urllib.request.urlopen(req, timeout=300)
             for line in resp:
                 if line:
-                    chunk = json.loads(line.decode())
+                    try:
+                        chunk = json.loads(line.decode())
+                    except json.JSONDecodeError:
+                        continue
                     content = chunk.get("message", {}).get("content", "")
                     if content:
                         yield content
                     if chunk.get("done"):
                         break
-        except Exception:
-            pass
+        except Exception as e:
+            yield f"\n[Error: Ollama connection failed — {type(e).__name__}: {e}]"
 
     def unload(self) -> None:
         self._model = ""
