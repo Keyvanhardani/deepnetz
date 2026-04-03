@@ -34,8 +34,19 @@ jobs:
 
       - name: Build compiled wheel
         run: |
+          pip install auditwheel
           python setup.py build_ext --inplace
           python setup.py bdist_wheel
+
+      - name: Fix wheel tags (Linux manylinux)
+        if: runner.os == 'Linux'
+        run: |
+          pip install auditwheel patchelf
+          for whl in dist/*.whl; do
+            auditwheel repair "$whl" -w dist_fixed/ --plat manylinux2014_x86_64 || cp "$whl" dist_fixed/
+          done
+          rm -rf dist
+          mv dist_fixed dist
 
       - name: Strip source from wheel (keep __init__.py + static assets)
         shell: python
