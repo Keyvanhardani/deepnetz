@@ -37,18 +37,23 @@ jobs:
           python setup.py build_ext --inplace
           python setup.py bdist_wheel
 
-      - name: Strip source from wheel
+      - name: Strip source from wheel (keep __init__.py + static assets)
         shell: python
         run: |
           import zipfile, glob, os
           whl = glob.glob('dist/*.whl')[0]
           clean = whl + '.clean'
           keep_py = {'__init__.py'}
+          keep_ext = {'.html', '.css', '.js', '.svg', '.png', '.ico'}
           with zipfile.ZipFile(whl, 'r') as zin, zipfile.ZipFile(clean, 'w') as zout:
               for item in zin.infolist():
-                  if item.filename.endswith('.py') and os.path.basename(item.filename) not in keep_py:
+                  name = item.filename
+                  ext = os.path.splitext(name)[1]
+                  basename = os.path.basename(name)
+                  # Keep: __init__.py, compiled .so/.pyd, static assets, dist-info
+                  if name.endswith('.py') and basename not in keep_py:
                       continue
-                  zout.writestr(item, zin.read(item.filename))
+                  zout.writestr(item, zin.read(name))
           os.remove(whl)
           os.rename(clean, whl)
           print(f"Cleaned: {whl}")
