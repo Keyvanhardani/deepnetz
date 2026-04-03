@@ -1,14 +1,7 @@
-recursive-include deepnetz *.so *.pyd
-include deepnetz/__init__.py
-include deepnetz/cache/__init__.py
-include deepnetz/offload/__init__.py
-include deepnetz/engine/__init__.py
+recursive-include deepnetz *.py
+recursive-include deepnetz/ui/static *
+recursive-include deepnetz/ui/templates *
 include README.md
+include LICENSE
 include pyproject.toml
-recursive-exclude deepnetz *.py
-recursive-exclude deepnetz *.c
-# Re-include __init__.py files (needed for package discovery)
-include deepnetz/__init__.py
-include deepnetz/cache/__init__.py
-include deepnetz/offload/__init__.py
-include deepnetz/engine/__init__.py
+include assets/logo.png
