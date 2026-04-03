@@ -133,6 +133,12 @@ def cmd_login(args):
     import getpass
     client = RegistryClient()
 
+    if args.browser:
+        # Device Flow: öffne Browser
+        _device_flow_login(client)
+        return
+
+    # Fallback: Username + Password
     username = args.username or input("  Username: ").strip()
     password = getpass.getpass("  Passwort: ")
 
@@ -142,6 +148,54 @@ def cmd_login(args):
         print(f"  API-Key gespeichert.\n")
     except RuntimeError as e:
         print(f"\n  Fehler: {e}\n")
+
+
+def _device_flow_login(client):
+    """Device auth flow: CLI → Browser → Login → CLI bekommt Key."""
+    import webbrowser
+
+    print(f"\n  DeepNetz Login")
+    print(f"  ─────────────────────────────────────")
+
+    # 1. Start device flow
+    try:
+        result = client._request("/v1/auth/device", method="POST")
+        if not result:
+            print(f"  Registry nicht erreichbar.\n")
+            return
+    except Exception as e:
+        print(f"  Fehler: {e}\n")
+        return
+
+    device_code = result["device_code"]
+    user_code = result["user_code"]
+    url = result["verification_url"]
+
+    print(f"  Code: {user_code}")
+    print(f"  Öffne Browser: {url}")
+    print()
+
+    # 2. Open browser
+    webbrowser.open(url)
+
+    # 3. Poll until complete
+    print(f"  Warte auf Login im Browser...", end="", flush=True)
+    import time as _time
+    for _ in range(60):  # max 5 min (60 * 5s)
+        _time.sleep(5)
+        try:
+            poll = client._request(f"/v1/auth/device/{device_code}/poll")
+            if poll and poll.get("status") == "complete":
+                api_key = poll["api_key"]
+                client._save_api_key(api_key)
+                print(f"\n\n  Login erfolgreich!")
+                print(f"  API-Key gespeichert.\n")
+                return
+        except Exception:
+            pass
+        print(".", end="", flush=True)
+
+    print(f"\n\n  Timeout — Login nicht abgeschlossen.\n")
 
 
 def cmd_search(args):
@@ -288,6 +342,7 @@ def main():
     # login
     p_login = subparsers.add_parser("login", help="Einloggen bei registry.deepnetz.com")
     p_login.add_argument("--username", default="", help="Username")
+    p_login.add_argument("--browser", action="store_true", help="Login über Browser (GitHub/Google)")
 
     # search
     p_search = subparsers.add_parser("search", help="Modelle suchen (über Registry)")
