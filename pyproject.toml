@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepnetz"
-version = "1.0.0"
+version = "1.0.3"
 description = "Run massive models on minimal hardware"
 readme = "README.md"
 license = {text = "MIT"}
