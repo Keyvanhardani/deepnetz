@@ -349,6 +349,11 @@ def cmd_registry(args):
     uvicorn.run(app, host="0.0.0.0", port=args.port)
 
 
+def cmd_convert(args):
+    from deepnetz.engine.converter import convert_model
+    convert_model(args.source, output_dir=args.output, quant=args.quant)
+
+
 def cmd_download(args):
     from deepnetz.engine.downloader import pull_model
     pull_model(args.model, quant=args.quant)
@@ -437,6 +442,12 @@ def main():
     p_reg = subparsers.add_parser("registry", help="Registry Server starten")
     p_reg.add_argument("--port", type=int, default=8090, help="Port (Standard: 8090)")
 
+    # convert
+    p_conv = subparsers.add_parser("convert", help="Modell konvertieren (HF → GGUF)")
+    p_conv.add_argument("source", help="Quelle (HF Repo oder lokales Verzeichnis)")
+    p_conv.add_argument("--quant", default="Q4_K_M", help="Quantisierung")
+    p_conv.add_argument("--output", default=".", help="Ausgabeverzeichnis")
+
     # download (legacy)
     p_dl = subparsers.add_parser("download", help="Modell herunterladen (Alias für pull)")
     p_dl.add_argument("model", help="Modellname")
@@ -456,6 +467,7 @@ def main():
         "pull": cmd_pull,
         "list": cmd_list,
         "registry": cmd_registry,
+        "convert": cmd_convert,
         "download": cmd_download,
     }
 
