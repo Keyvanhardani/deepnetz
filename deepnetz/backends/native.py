@@ -105,7 +105,6 @@ class NativeBackend(BackendAdapter):
         type_k_id = type_map.get(kv_type_k, 1)
         type_v_id = type_map.get(kv_type_v, 1)
 
-        # Try to pass type_k/type_v (requires llama-cpp-python with support)
         llama_kwargs = {
             "model_path": model_ref,
             "n_ctx": n_ctx,
@@ -113,10 +112,16 @@ class NativeBackend(BackendAdapter):
             "n_threads": n_threads,
             "verbose": False,
         }
-        try:
-            self._llm = Llama(type_k=type_k_id, type_v=type_v_id, **llama_kwargs)
-        except TypeError:
-            # Older llama-cpp-python without type_k/type_v support
+
+        # Only pass type_k/type_v when using KV compression (not f16)
+        # Explicitly setting f16 (type_id=1) triggers a slow path in llama-cpp
+        use_kv_quant = kv_type_k != "f16" and kv_type_v != "f16"
+        if use_kv_quant:
+            try:
+                self._llm = Llama(type_k=type_k_id, type_v=type_v_id, **llama_kwargs)
+            except TypeError:
+                self._llm = Llama(**llama_kwargs)
+        else:
             self._llm = Llama(**llama_kwargs)
 
         # Initialize eviction if context is large
