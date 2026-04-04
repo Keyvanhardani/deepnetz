@@ -787,28 +787,50 @@ DN.models = {
       }
 
       empty.classList.add('hidden');
-      var html = models.map(function(m) {
-        var isActive = DN.health.model && (m.path === DN.health.model || m.id === DN.health.model);
-        var name = m.id.split('/').pop().replace(/\.gguf$/i, '');
-        var size = DN.util.formatSize(m.size_mb);
-        return '<div class="model-card' + (isActive ? ' model-active' : '') + '">' +
-          '<div class="model-card-header">' +
-            '<div class="model-card-name">' + DN.util.esc(name) + '</div>' +
-            (isActive ? '<span class="badge badge-active">Active</span>' : '') +
-          '</div>' +
-          '<div class="model-card-meta">' +
-            '<span class="badge badge-' + (m.backend || 'native') + '">' + DN.util.esc(m.backend || 'native') + '</span>' +
-            (size ? '<span class="model-card-size">' + size + '</span>' : '') +
-          '</div>' +
-          '<div class="model-card-path">' + DN.util.esc(m.path || m.id) + '</div>' +
-          '<div class="model-card-actions">' +
-            (isActive
-              ? '<button class="btn btn-sm" onclick="DN.models.unload()" style="border-color:var(--red);color:var(--red);">Unload</button>'
-              : '<button class="btn btn-sm btn-primary" onclick="DN.models.loadModel(\'' + DN.util.esc(m.path || m.id).replace(/'/g, "\\'") + '\',\'' + DN.util.esc(m.backend || '') + '\')">Load</button>'
-            ) +
-          '</div>' +
-        '</div>';
-      }).join('');
+
+      // Group models by backend
+      var groups = {};
+      models.forEach(function(m) {
+        var bk = m.backend || 'native';
+        if (!groups[bk]) groups[bk] = [];
+        groups[bk].push(m);
+      });
+
+      var backendLabels = {
+        native: 'Local GGUF Models',
+        ollama: 'Ollama Models',
+        lmstudio: 'LM Studio Models',
+        vllm: 'vLLM Models',
+        huggingface: 'HuggingFace Models',
+        remote: 'Remote Models'
+      };
+
+      var html = '';
+      Object.keys(groups).forEach(function(bk) {
+        html += '<div class="model-group-header"><span class="badge badge-' + bk + '">' + DN.util.esc(bk) + '</span> ' + (backendLabels[bk] || bk) + ' <span class="model-group-count">(' + groups[bk].length + ')</span></div>';
+        html += groups[bk].map(function(m) {
+          var isActive = DN.health.model && (m.path === DN.health.model || m.id === DN.health.model);
+          var name = m.id.split('/').pop().replace(/\.gguf$/i, '');
+          var size = DN.util.formatSize(m.size_mb);
+          return '<div class="model-card' + (isActive ? ' model-active' : '') + '">' +
+            '<div class="model-card-header">' +
+              '<div class="model-card-name">' + DN.util.esc(name) + '</div>' +
+              (isActive ? '<span class="badge badge-active">Active</span>' : '') +
+            '</div>' +
+            '<div class="model-card-meta">' +
+              '<span class="badge badge-' + (m.backend || 'native') + '">' + DN.util.esc(m.backend || 'native') + '</span>' +
+              (size ? '<span class="model-card-size">' + size + '</span>' : '') +
+            '</div>' +
+            '<div class="model-card-path">' + DN.util.esc(m.path || m.id) + '</div>' +
+            '<div class="model-card-actions">' +
+              (isActive
+                ? '<button class="btn btn-sm" onclick="DN.models.unload()" style="border-color:var(--red);color:var(--red);">Unload</button>'
+                : '<button class="btn btn-sm btn-primary" data-path="' + DN.util.esc(m.path || m.id) + '" data-backend="' + DN.util.esc(m.backend || '') + '" onclick="DN.models.loadModel(this.dataset.path, this.dataset.backend)">Load</button>'
+              ) +
+            '</div>' +
+          '</div>';
+        }).join('');
+      });
       grid.innerHTML = html;
     }).catch(function() {});
   },
@@ -1243,10 +1265,22 @@ DN.auth = {
       return;
     }
 
-    // Check server
+    // Check URL params (redirect from deepnetz.com/auth after login)
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('apikey') && params.get('username')) {
+      var u = params.get('username');
+      var k = params.get('apikey');
+      localStorage.setItem('deepnetz_cfg', JSON.stringify({ username: u, apikey: k }));
+      DN.auth.showLoggedIn(u);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // Check server credentials file
     DN.api.get('/v1/auth/status').then(function(d) {
       if (d.logged_in) {
-        DN.auth.showLoggedIn(d.api_key_prefix || 'Logged in');
+        DN.auth.showLoggedIn(d.username || d.api_key_prefix || 'Logged in');
       }
     }).catch(function() {});
   },
@@ -1256,6 +1290,39 @@ DN.auth = {
     var profile = document.getElementById('auth-profile');
     profile.classList.remove('hidden');
     document.getElementById('auth-name').textContent = name;
+  },
+
+  login: function() {
+    var redirect = encodeURIComponent(window.location.origin + '/chat?login=1');
+    window.open('https://deepnetz.com/auth/?redirect=' + redirect, '_blank');
+    // Also try CLI-style auth popup
+    DN.auth._pollLogin();
+  },
+
+  _pollLogin: function() {
+    // Poll auth status every 3s for 2 minutes (user might be logging in on deepnetz.com)
+    var attempts = 0;
+    var poll = setInterval(function() {
+      attempts++;
+      if (attempts > 40) { clearInterval(poll); return; }
+      // Check if localStorage was set (via redirect)
+      var cfg = null;
+      try { cfg = JSON.parse(localStorage.getItem('deepnetz_cfg')); } catch(e) {}
+      if (cfg && cfg.username) {
+        DN.auth.showLoggedIn(cfg.username);
+        clearInterval(poll);
+        DN.toast.show('Willkommen, ' + cfg.username + '!', 'success');
+        return;
+      }
+      // Check server credentials
+      DN.api.get('/v1/auth/status').then(function(d) {
+        if (d.logged_in) {
+          DN.auth.showLoggedIn(d.username || 'Logged in');
+          clearInterval(poll);
+          DN.toast.show('Willkommen!', 'success');
+        }
+      }).catch(function(){});
+    }, 3000);
   },
 
   logout: function() {

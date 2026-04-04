@@ -321,7 +321,11 @@ def create_app(model_path: str,
                 with open(cred_path) as f:
                     data = json.load(f)
                 if data.get("api_key"):
-                    return {"logged_in": True, "api_key_prefix": data["api_key"][:10] + "..."}
+                    return {
+                        "logged_in": True,
+                        "username": data.get("username", ""),
+                        "api_key_prefix": data["api_key"][:10] + "...",
+                    }
             except Exception:
                 pass
         return {"logged_in": False}

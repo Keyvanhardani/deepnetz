@@ -1688,6 +1688,26 @@ tr:hover td { background: var(--bg-hover); }
   position: relative;
 }
 
+/* ---- Model Groups ---- */
+.model-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  margin-top: 8px;
+}
+.model-group-header:first-child { margin-top: 0; }
+.model-group-count {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-size: 12px;
+}
+
 /* ---- Chat Toolbar ---- */
 .chat-toolbar {
   display: flex;
