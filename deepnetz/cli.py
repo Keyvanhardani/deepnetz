@@ -535,7 +535,7 @@ def main():
 
     # serve
     p_serve = subparsers.add_parser("serve", help="Start OpenAI-compatible API server")
-    p_serve.add_argument("model", help="Path to GGUF model file")
+    p_serve.add_argument("model", nargs="?", default="", help="Path to GGUF model file (optional — load via UI)")
     p_serve.add_argument("--port", type=int, default=8080)
     p_serve.add_argument("--host", default="0.0.0.0")
     p_serve.add_argument("--gpu", default="auto")
