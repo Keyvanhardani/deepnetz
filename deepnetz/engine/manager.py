@@ -33,18 +33,22 @@ class ModelManager:
     def is_loaded(self) -> bool:
         return self._active_model is not None
 
-    def load_model(self, model_ref: str, backend: str = "") -> Model:
+    def load_model(self, model_ref: str, backend: str = "",
+                   cpu_only: bool = None, target_context: int = 0) -> Model:
         """Load a model. Unloads current model first if any."""
         if self._active_model:
             self.unload_model()
 
         bk = backend or self.default_backend
+        use_cpu = cpu_only if cpu_only is not None else self.cpu_only
+        ctx = target_context if target_context > 0 else self.target_context
+
         model = Model(
             model_ref,
             gpu_budget=self.gpu_budget,
             ram_budget=self.ram_budget,
-            target_context=self.target_context,
-            cpu_only=self.cpu_only,
+            target_context=ctx,
+            cpu_only=use_cpu,
             backend=bk,
             verbose=False,
         )

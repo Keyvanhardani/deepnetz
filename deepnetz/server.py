@@ -238,7 +238,7 @@ def create_app(model_path: str,
     class LoadRequest(PydanticBaseModel):
         model: str
         backend: str = ""
-        gpu_layers: int = -1
+        cpu_only: bool = False
         context_length: int = 0
 
     class DownloadRequest(PydanticBaseModel):
@@ -253,7 +253,14 @@ def create_app(model_path: str,
         model_path = os.path.normpath(req.model) if req.model else req.model
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, app.state.manager.load_model, model_path, req.backend)
+            await loop.run_in_executor(
+                None,
+                lambda: app.state.manager.load_model(
+                    model_path, req.backend,
+                    cpu_only=req.cpu_only,
+                    target_context=req.context_length,
+                )
+            )
             return {"status": "ok", "model": req.model}
         except Exception as e:
             return JSONResponse(
