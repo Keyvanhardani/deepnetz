@@ -108,9 +108,31 @@ def create_app(model_path: str,
                     session_store.save(session)
 
         if req.stream:
+            import asyncio, queue, threading
+
             async def generate():
+                q = queue.Queue()
                 full_response = []
-                for token in model.backend.stream(messages, config):
+
+                def _stream_worker():
+                    try:
+                        for token in model.backend.stream(messages, config):
+                            q.put(token)
+                        q.put(None)  # sentinel
+                    except Exception as e:
+                        q.put(None)
+
+                thread = threading.Thread(target=_stream_worker, daemon=True)
+                thread.start()
+
+                while True:
+                    try:
+                        token = q.get(timeout=0.05)
+                    except queue.Empty:
+                        await asyncio.sleep(0.01)
+                        continue
+                    if token is None:
+                        break
                     full_response.append(token)
                     chunk = {
                         "id": f"chatcmpl-{int(time.time())}",
@@ -120,15 +142,17 @@ def create_app(model_path: str,
                                      "finish_reason": None}]
                     }
                     yield f"data: {json.dumps(chunk)}\n\n"
-                # Persist assistant response to session
+
                 if session:
                     assistant_text = "".join(full_response)
                     session_store.add_message(req.session_id, "assistant", assistant_text)
                 yield "data: [DONE]\n\n"
+
             return StreamingResponse(generate(), media_type="text/event-stream")
         else:
-            response = model.backend.chat(messages, config)
-            # Persist assistant response to session
+            import asyncio
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, model.backend.chat, messages, config)
             if session:
                 session_store.add_message(req.session_id, "assistant", response)
             return {
