@@ -809,6 +809,19 @@ DN.models = {
 
       empty.classList.add('hidden');
 
+      // Filter out mmproj files (vision projectors, not standalone models)
+      models = models.filter(function(m) {
+        var name = (m.id || m.path || '').toLowerCase();
+        return !name.includes('mmproj');
+      });
+
+      if (!models.length) {
+        grid.innerHTML = '';
+        grid.appendChild(empty);
+        empty.classList.remove('hidden');
+        return;
+      }
+
       // Group models by backend
       var groups = {};
       models.forEach(function(m) {
@@ -876,30 +889,49 @@ DN.models = {
         grid.innerHTML = '<div class="empty-state"><p>No models found</p></div>';
         return;
       }
-      grid.innerHTML = cards.map(function(c) {
+      // Store cards for pull reference
+      DN.models._hubCards = {};
+      grid.innerHTML = cards.map(function(c, ci) {
+        DN.models._hubCards[ci] = c;
         var params = c.params_b ? c.params_b.toFixed(1) + 'B' : '';
+        if (c.active_params_b && c.active_params_b !== c.params_b) {
+          params += ' (' + c.active_params_b.toFixed(1) + 'B active)';
+        }
         var dl = c.downloads > 1000 ? Math.round(c.downloads / 1000) + 'k' : (c.downloads || 0);
         var tags = (c.tags || []).slice(0, 4).map(function(t) {
           return '<span class="model-tag">' + DN.util.esc(t) + '</span>';
         }).join('');
         var desc = c.architecture || '';
-        var quants = (c.quants || []).length;
+        var qs = (c.quants || []).filter(function(q) {
+          return q.filename && !q.filename.includes('mmproj') && q.filename.endsWith('.gguf');
+        });
+
+        // Build quant selector
+        var quantSelect = '';
+        if (qs.length > 0) {
+          var options = qs.map(function(q) {
+            var size = q.size_mb >= 1024 ? (q.size_mb / 1024).toFixed(1) + ' GB' : q.size_mb + ' MB';
+            var selected = q.name === 'Q4_K_M' ? ' selected' : '';
+            return '<option value="' + DN.util.esc(q.repo) + '::' + DN.util.esc(q.filename) + '"' + selected + '>' + DN.util.esc(q.name) + ' (' + size + ')</option>';
+          }).join('');
+          quantSelect = '<select class="model-selector quant-select" id="hub-quant-' + ci + '" style="flex:1;font-size:12px;">' + options + '</select>';
+        }
 
         return '<div class="model-card model-card-hub">' +
           '<div class="model-card-header">' +
             '<div class="model-card-name">' + DN.util.esc(c.name) + '</div>' +
           '</div>' +
           '<div class="model-card-meta">' +
-            (params ? '<span class="model-card-size">' + params + ' params</span>' : '') +
+            (params ? '<span class="model-card-size">' + params + '</span>' : '') +
             '<span class="model-card-size">' + desc + '</span>' +
             '<span class="model-card-size">' + dl + ' downloads</span>' +
           '</div>' +
           '<div class="model-card-tags">' + tags + '</div>' +
-          (quants > 0 ? '<div class="model-card-quants">' + quants + ' quantizations available</div>' : '') +
-          '<div class="model-card-actions">' +
-            (c.hf_repos && c.hf_repos.length > 0
-              ? '<button class="btn btn-sm btn-primary" onclick="DN.models.pullModel(\'' + DN.util.esc(c.hf_repos[0]).replace(/'/g, "\\'") + '\', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Pull</button>'
-              : '<span class="model-card-size">Use CLI: deepnetz pull ' + DN.util.esc(c.name) + '</span>'
+          '<div class="model-card-actions" style="display:flex;gap:6px;align-items:center;">' +
+            quantSelect +
+            (qs.length > 0
+              ? '<button class="btn btn-sm btn-primary" data-idx="' + ci + '" onclick="DN.models.pullFromHub(' + ci + ', this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Pull</button>'
+              : '<span class="model-card-size">No GGUF available</span>'
             ) +
           '</div>' +
         '</div>';
@@ -939,6 +971,42 @@ DN.models = {
       DN.models.init();
     }).catch(function(e) {
       DN.toast.show('Unload failed: ' + e.message, 'error');
+    });
+  },
+
+  pullFromHub: function(idx, btn) {
+    var select = document.getElementById('hub-quant-' + idx);
+    if (!select || !select.value) {
+      DN.toast.show('No quantization selected', 'error');
+      return;
+    }
+    var parts = select.value.split('::');
+    var repo = parts[0];
+    var filename = parts[1];
+    btn.disabled = true;
+    select.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Pulling...';
+    DN.toast.show('Downloading ' + filename + '...', 'info', 60000);
+
+    DN.api.post('/v1/models/download', { model: repo, filename: filename }).then(function(d) {
+      if (d.status === 'error') {
+        DN.toast.show('Download failed: ' + (d.error || 'Unknown'), 'error', 5000);
+        btn.disabled = false;
+        select.disabled = false;
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Pull';
+      } else {
+        DN.toast.show('Model downloaded: ' + filename, 'success');
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Done';
+        btn.className = 'btn btn-sm';
+        btn.style.color = 'var(--green)';
+        btn.style.borderColor = 'var(--green)';
+        DN.models.loadLocalModels();
+      }
+    }).catch(function(e) {
+      DN.toast.show('Download failed: ' + e.message, 'error', 5000);
+      btn.disabled = false;
+      select.disabled = false;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Pull';
     });
   },
 

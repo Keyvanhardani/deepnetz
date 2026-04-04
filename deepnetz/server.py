@@ -243,6 +243,7 @@ def create_app(model_path: str,
 
     class DownloadRequest(PydanticBaseModel):
         model: str
+        filename: str = ""  # specific GGUF file in repo
 
     @app.post("/v1/models/load")
     async def load_model_endpoint(req: LoadRequest):
@@ -265,7 +266,13 @@ def create_app(model_path: str,
     async def download_model_endpoint(req: DownloadRequest):
         try:
             from deepnetz.engine.resolver import resolve_model
-            path = resolve_model(req.model, output_dir=".")
+            # If filename given, use hf://repo/filename format
+            ref = req.model
+            if req.filename:
+                ref = f"hf://{req.model}/{req.filename}"
+            elif "/" in ref and not ref.startswith(("hf://", "http")):
+                ref = f"hf://{ref}"
+            path = resolve_model(ref, output_dir=".")
             return {"status": "ok", "path": path}
         except Exception as e:
             return {"status": "error", "error": str(e)}
