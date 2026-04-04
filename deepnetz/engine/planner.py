@@ -104,7 +104,7 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
 
         # How many layers fit on GPU?
         available_gpu = gpu_budget - kv_mb if hw.has_cuda else 0
-        weight_per_layer = weight_mb / model.n_layers
+        weight_per_layer = weight_mb / max(model.n_layers, 1)
 
         if available_gpu > 0:
             n_gpu = min(model.n_layers, int(available_gpu / weight_per_layer))
@@ -121,7 +121,7 @@ def plan_inference(model: ModelSpec, hw: HardwareProfile,
 
         # Speed estimates (very rough)
         if n_gpu > 0:
-            gpu_fraction = n_gpu / model.n_layers
+            gpu_fraction = n_gpu / max(model.n_layers, 1)
             est_gen = 5.0 * gpu_fraction + 0.5 * (1 - gpu_fraction)
         else:
             est_gen = 0.5 if weight_mb > 15000 else 2.0
