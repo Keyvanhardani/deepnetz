@@ -95,9 +95,10 @@ body {
 .sidebar-brand-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--accent), var(--purple));
+  background: transparent;
   border-radius: var(--radius-sm);
   display: flex;
+  overflow: hidden;
   align-items: center;
   justify-content: center;
   font-weight: 800;
@@ -1351,9 +1352,18 @@ tr:hover td { background: var(--bg-hover); }
 
 .sidebar-footer-auth {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
 }
+.sidebar-footer-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-decoration: none;
+}
+.sidebar-footer-link:hover { color: var(--text-secondary); }
 
 .auth-profile {
   display: flex;
