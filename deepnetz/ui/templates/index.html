@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepNetz</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <div class="brand-icon">DN</div>
+        <div class="brand-text">DeepNetz</div>
+      </div>
+      <div class="model-badge" id="model-badge">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">No model</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#/chat" class="nav-item active" data-page="chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chat
+      </a>
+      <a href="#/models" class="nav-item" data-page="models">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        Models
+      </a>
+      <a href="#/monitor" class="nav-item" data-page="monitor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Monitor
+      </a>
+      <a href="#/settings" class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </a>
+    </nav>
+
+    <!-- Chat list (shown on chat page) -->
+    <div class="sidebar-chats" id="chat-list"></div>
+
+    <!-- Auth -->
+    <div class="sidebar-auth" id="sidebar-auth">
+      <a href="https://deepnetz.com/auth" target="_blank" class="auth-btn" id="auth-login-btn">Login</a>
+      <div class="auth-profile" id="auth-profile" style="display:none">
+        <div class="auth-avatar" id="auth-avatar">?</div>
+        <span id="auth-name">—</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <a href="https://deepnetz.com" target="_blank">deepnetz.com</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Page: Chat -->
+    <div class="page active" id="page-chat">
+      <div class="page-header">
+        <h2 id="chat-title">New Chat</h2>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" onclick="DN.chat.newChat()">+ New</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-welcome" id="chat-welcome">
+          <div class="welcome-icon">DN</div>
+          <h3>DeepNetz</h3>
+          <p>Load a model and start chatting.</p>
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-controls" id="chat-controls"></div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="1" placeholder="Send a message..." disabled></textarea>
+          <button class="btn btn-primary" id="chat-send" onclick="DN.chat.send()" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Models -->
+    <div class="page" id="page-models">
+      <div class="page-header">
+        <h2>Models</h2>
+      </div>
+      <div class="page-body">
+        <div class="search-bar">
+          <input id="model-search" placeholder="Search models..." oninput="DN.models.search(this.value)">
+        </div>
+        <h3 class="section-title">Local Models</h3>
+        <div class="model-grid" id="local-models"></div>
+        <h3 class="section-title" style="margin-top:24px">Registry</h3>
+        <div class="model-grid" id="registry-models"></div>
+      </div>
+    </div>
+
+    <!-- Page: Monitor -->
+    <div class="page" id="page-monitor">
+      <div class="page-header">
+        <h2>System Monitor</h2>
+        <div class="spacer"></div>
+        <span class="badge" id="mon-model">—</span>
+      </div>
+      <div class="page-body">
+        <div class="monitor-grid">
+          <div class="mon-card">
+            <div class="mon-label">GPU</div>
+            <div class="mon-value" id="mon-gpu-name">—</div>
+            <div class="mon-bar"><div class="mon-bar-fill" id="mon-gpu-bar"></div></div>
+            <div class="mon-detail"><span id="mon-gpu-vram">—</span> VRAM &middot; <span id="mon-gpu-temp">—</span></div>
+          </div>
+          <div class="mon-card">
+            <div class="mon-label">CPU</div>
+            <div class="mon-value" id="mon-cpu-val">—</div>
+            <div class="mon-bar"><div class="mon-bar-fill" id="mon-cpu-bar"></div></div>
+            <div class="mon-detail"><span id="mon-cpu-cores">—</span> cores</div>
+          </div>
+          <div class="mon-card">
+            <div class="mon-label">RAM</div>
+            <div class="mon-value" id="mon-ram-val">—</div>
+            <div class="mon-bar"><div class="mon-bar-fill" id="mon-ram-bar"></div></div>
+            <div class="mon-detail"><span id="mon-ram-used">—</span> / <span id="mon-ram-total">—</span></div>
+          </div>
+          <div class="mon-card">
+            <div class="mon-label">Inference</div>
+            <div class="mon-value" id="mon-tps">0 tok/s</div>
+            <canvas id="mon-tps-chart" width="280" height="60"></canvas>
+            <div class="mon-detail">Generation speed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Settings -->
+    <div class="page" id="page-settings">
+      <div class="page-header"><h2>Settings</h2></div>
+      <div class="page-body settings-body">
+        <div class="settings-section">
+          <h3>Compute</h3>
+          <div class="setting-row">
+            <label>Device</label>
+            <div class="toggle-group">
+              <button class="toggle active" data-val="gpu" onclick="DN.settings.setDevice('gpu')">GPU</button>
+              <button class="toggle" data-val="cpu" onclick="DN.settings.setDevice('cpu')">CPU</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Context Length</label>
+            <input type="range" id="cfg-context" min="512" max="131072" step="512" value="4096" oninput="DN.settings.updateLabel(this, 'ctx-val')">
+            <span class="setting-val" id="ctx-val">4096</span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Generation</h3>
+          <div class="setting-row">
+            <label>Temperature</label>
+            <input type="range" id="cfg-temp" min="0" max="2" step="0.1" value="0.7" oninput="DN.settings.updateLabel(this, 'temp-val')">
+            <span class="setting-val" id="temp-val">0.7</span>
+          </div>
+          <div class="setting-row">
+            <label>Max Tokens</label>
+            <input type="number" id="cfg-tokens" value="1024" min="1" max="8192">
+          </div>
+          <div class="setting-row">
+            <label>Top P</label>
+            <input type="range" id="cfg-topp" min="0" max="1" step="0.05" value="0.9" oninput="DN.settings.updateLabel(this, 'topp-val')">
+            <span class="setting-val" id="topp-val">0.9</span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Backend</h3>
+          <div class="setting-row">
+            <label>Backend</label>
+            <select id="cfg-backend"><option value="auto">Auto</option></select>
+          </div>
+          <div class="setting-row">
+            <label>KV Compression</label>
+            <select id="cfg-kv">
+              <option value="off">Off (f16)</option>
+              <option value="q8_0">q8_0 (1.9x)</option>
+              <option value="q4_0">q4_0 (3.6x)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Advanced</h3>
+          <div class="setting-row">
+            <label>Reasoning Mode</label>
+            <label class="switch"><input type="checkbox" id="cfg-reasoning"><span class="slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <label>API Key</label>
+            <input type="text" id="cfg-apikey" placeholder="dn-...">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span id="sb-model">No model</span>
+      <span id="sb-backend">—</span>
+      <span id="sb-gpu">—</span>
+      <span class="spacer"></span>
+      <span id="sb-tps">—</span>
+    </div>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

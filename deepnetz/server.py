@@ -254,6 +254,65 @@ def create_app(model_path: str,
         session_store.delete(session_id)
         return {"status": "ok"}
 
+    # ---- Config / Hardware / Cards / Auth endpoints ----
+
+    @app.get("/v1/config")
+    async def get_config():
+        mgr = app.state.manager
+        model = mgr.get_active()
+        return {
+            "gpu_budget": mgr.gpu_budget,
+            "ram_budget": mgr.ram_budget,
+            "target_context": mgr.target_context,
+            "cpu_only": mgr.cpu_only,
+            "default_backend": mgr.default_backend,
+            "model": mgr.model_ref,
+            "loaded": mgr.is_loaded,
+        }
+
+    @app.post("/v1/models/unload")
+    async def unload_model():
+        app.state.manager.unload_model()
+        return {"status": "ok"}
+
+    @app.get("/v1/cards/search")
+    async def search_model_cards(q: str = "", limit: int = 20):
+        from deepnetz.engine.cards import load_cards, search_cards
+        cards = load_cards()
+        if not q:
+            # Return all cards sorted by downloads
+            all_cards = sorted(cards.values(), key=lambda c: c.downloads, reverse=True)
+            return {"cards": [c.to_dict() for c in all_cards[:limit]]}
+        results = search_cards(q, cards)
+        return {"cards": [c.to_dict() for c in results[:limit]]}
+
+    @app.get("/v1/auth/status")
+    async def auth_status():
+        import os as _os
+        cred_path = _os.path.join(_os.path.expanduser("~"), ".config", "deepnetz", "credentials.json")
+        if _os.path.exists(cred_path):
+            try:
+                with open(cred_path) as f:
+                    data = json.load(f)
+                if data.get("api_key"):
+                    return {"logged_in": True, "api_key_prefix": data["api_key"][:10] + "..."}
+            except Exception:
+                pass
+        return {"logged_in": False}
+
+    @app.get("/v1/hardware")
+    async def hardware_info():
+        from deepnetz.engine.hardware import detect_hardware
+        hw = detect_hardware()
+        return {
+            "cpu_cores": hw.cpu_cores,
+            "ram_mb": hw.ram_mb,
+            "gpus": [{"name": g.name, "vram_mb": g.vram_mb, "compute": g.compute_capability} for g in hw.gpus],
+            "total_vram_mb": hw.total_vram_mb,
+            "has_cuda": hw.has_cuda,
+            "os": hw.os,
+        }
+
     # Mount Web UI
     from deepnetz.ui.routes import mount_ui
     mount_ui(app)
