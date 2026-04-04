@@ -7,91 +7,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+  build:
+    name: Build pure Python package
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install cython setuptools wheel build
+      - name: Install build tools
+        run: pip install build
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y python3-dev
+      - name: Build source distribution
+        run: python -m build --sdist
 
-      - name: Build compiled wheel
-        run: |
-          pip install auditwheel
-          python setup.py build_ext --inplace
-          python setup.py bdist_wheel
-
-      - name: Fix wheel tags (Linux manylinux)
-        if: runner.os == 'Linux'
-        run: |
-          pip install auditwheel patchelf
-          for whl in dist/*.whl; do
-            auditwheel repair "$whl" -w dist_fixed/ --plat manylinux2014_x86_64 || cp "$whl" dist_fixed/
-          done
-          rm -rf dist
-          mv dist_fixed dist
-
-      - name: Strip source from wheel (keep __init__.py + static assets)
-        shell: python
-        run: |
-          import zipfile, glob, os
-          whl = glob.glob('dist/*.whl')[0]
-          clean = whl + '.clean'
-          keep_py = {'__init__.py'}
-          keep_ext = {'.html', '.css', '.js', '.svg', '.png', '.ico'}
-          with zipfile.ZipFile(whl, 'r') as zin, zipfile.ZipFile(clean, 'w') as zout:
-              for item in zin.infolist():
-                  name = item.filename
-                  ext = os.path.splitext(name)[1]
-                  basename = os.path.basename(name)
-                  # Keep: __init__.py, compiled .so/.pyd, static assets, dist-info
-                  if name.endswith('.py') and basename not in keep_py:
-                      continue
-                  zout.writestr(item, zin.read(name))
-          os.remove(whl)
-          os.rename(clean, whl)
-          print(f"Cleaned: {whl}")
-
-      - name: Upload wheel artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: dist/*.whl
+          name: dist
+          path: dist/*.tar.gz
 
   publish:
     name: Publish to PyPI
-    needs: build-wheels
+    needs: build
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write
 
     steps:
-      - name: Download all wheels
+      - name: Download dist
         uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
-
-      - name: List wheels
-        run: ls -la dist/
+          name: dist
+          path: dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
