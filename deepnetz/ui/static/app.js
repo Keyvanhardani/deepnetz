@@ -261,10 +261,15 @@ DN.health = {
 
   check: function() {
     DN.api.get('/health').then(function(d) {
+      var prevModel = DN.health.model;
       DN.health.model = d.model || '';
       DN.health.backend = d.backend || 'none';
       DN.health.loading = d.loading || false;
       DN.health.updateUI();
+      // Update toolbar when model changes
+      if (DN.health.model && DN.health.model !== prevModel && DN.chat.updateToolbar) {
+        DN.chat.updateToolbar();
+      }
     }).catch(function() {});
   },
 
@@ -308,6 +313,8 @@ DN.chat = {
   activeId: null,
   sending: false,
   allSessions: [], // unfiltered
+  features: { think: false, reasoning: false, web_search: false, tool_call: false },
+  imageData: null, // base64 image for vision
 
   init: function() {
     var input = document.getElementById('chat-input');
@@ -544,6 +551,53 @@ DN.chat = {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   },
 
+  toggleFeature: function(name) {
+    DN.chat.features[name] = !DN.chat.features[name];
+    var btn = document.getElementById('tb-' + (name === 'web_search' ? 'search' : name === 'tool_call' ? 'tools' : name));
+    if (btn) btn.classList.toggle('active', DN.chat.features[name]);
+  },
+
+  uploadImage: function() {
+    document.getElementById('image-upload').click();
+  },
+
+  handleImageUpload: function(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      DN.chat.imageData = e.target.result; // data:image/...;base64,...
+      var preview = document.getElementById('chat-image-preview');
+      document.getElementById('chat-image-thumb').src = DN.chat.imageData;
+      preview.classList.remove('hidden');
+      // Auto-enable vision toolbar button
+      var btn = document.getElementById('tb-vision');
+      if (btn) btn.classList.add('active');
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  },
+
+  clearImage: function() {
+    DN.chat.imageData = null;
+    document.getElementById('chat-image-preview').classList.add('hidden');
+    document.getElementById('chat-image-thumb').src = '';
+    var btn = document.getElementById('tb-vision');
+    if (btn) btn.classList.remove('active');
+  },
+
+  updateToolbar: function() {
+    // Check /v1/features to enable/disable toolbar buttons based on model capabilities
+    DN.api.get('/v1/features').then(function(f) {
+      var vis = document.getElementById('tb-vision');
+      var reas = document.getElementById('tb-reasoning');
+      var tools = document.getElementById('tb-tools');
+      if (vis) vis.style.opacity = f.vision ? '1' : '0.4';
+      if (reas) reas.style.opacity = (f.reasoning || f.thinking) ? '1' : '0.4';
+      if (tools) tools.style.opacity = f.tool_calling ? '1' : '0.4';
+    }).catch(function() {});
+  },
+
   send: function() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
@@ -574,20 +628,39 @@ DN.chat = {
         if (m === typingDiv) return;
         var role = m.classList.contains('message-user') ? 'user' : 'assistant';
         var body = m.querySelector('.message-content');
-        if (body) msgs.push({ role: role, content: body.textContent });
+        if (body) {
+          // If this is the last user message and has an image, include it
+          var content = body.textContent;
+          msgs.push({ role: role, content: content });
+        }
       });
+
+      // Build request body with feature flags
+      var reqBody = {
+        model: 'deepnetz',
+        messages: msgs,
+        stream: true,
+        max_tokens: maxTokens,
+        temperature: temp,
+        session_id: DN.chat.activeId || ''
+      };
+
+      // Add feature flags
+      if (DN.chat.features.think) reqBody.think_mode = true;
+      if (DN.chat.features.reasoning) reqBody.reasoning = true;
+      if (DN.chat.features.web_search) reqBody.web_search = true;
+      if (DN.chat.features.tool_call) reqBody.tool_call = true;
+
+      // Add image data for vision
+      if (DN.chat.imageData) {
+        reqBody.images = [DN.chat.imageData];
+        DN.chat.clearImage();
+      }
 
       fetch('/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'deepnetz',
-          messages: msgs,
-          stream: true,
-          max_tokens: maxTokens,
-          temperature: temp,
-          session_id: DN.chat.activeId || ''
-        })
+        body: JSON.stringify(reqBody)
       }).then(function(resp) {
         if (!resp.ok) {
           return resp.json().then(function(e) {

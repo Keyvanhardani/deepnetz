@@ -1688,6 +1688,53 @@ tr:hover td { background: var(--bg-hover); }
   position: relative;
 }
 
+/* ---- Chat Toolbar ---- */
+.chat-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0 4px;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.toolbar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+.toolbar-btn.active {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.toolbar-btn svg { flex-shrink: 0; }
+
+.chat-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.chat-image-preview img {
+  height: 48px;
+  width: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
 /* ---- Utility ---- */
 .hidden { display: none !important; }
 .text-green { color: var(--green); }
