@@ -189,6 +189,8 @@ def create_app(model_path: str,
     class LoadRequest(PydanticBaseModel):
         model: str
         backend: str = ""
+        gpu_layers: int = -1
+        context_length: int = 0
 
     class DownloadRequest(PydanticBaseModel):
         model: str

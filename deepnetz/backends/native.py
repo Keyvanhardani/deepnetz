@@ -192,8 +192,13 @@ class NativeBackend(BackendAdapter):
 
     def unload(self) -> None:
         if self._llm:
-            del self._llm
+            try:
+                self._llm.close()
+            except Exception:
+                pass
             self._llm = None
+            import gc
+            gc.collect()
 
     def stats(self) -> BackendStats:
         return BackendStats(
