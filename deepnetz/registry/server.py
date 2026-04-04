@@ -424,7 +424,7 @@ def create_registry_app(db_path: str = ""):
             "username": user["username"],
             "apikey": user.get("api_key", ""),
         })
-        redirect_url = f"https://deepnetz.com/auth/callback?{params}"
+        redirect_url = f"https://deepnetz.com/auth/?{params}"
         return HTMLResponse(f"""<!DOCTYPE html>
 <html><head><title>DeepNetz — Login erfolgreich</title>
 <meta http-equiv="refresh" content="1;url={redirect_url}">

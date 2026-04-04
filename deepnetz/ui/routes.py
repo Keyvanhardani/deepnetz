@@ -29,6 +29,15 @@ def mount_ui(app):
         with open(path) as f:
             return f.read()
 
+    from fastapi.responses import FileResponse
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        icon = os.path.join(STATIC_DIR, "logo.png")
+        if os.path.exists(icon):
+            return FileResponse(icon, media_type="image/png")
+        return HTMLResponse("", status_code=404)
+
     @app.get("/", response_class=HTMLResponse)
     async def root():
         return _render("index.html")
