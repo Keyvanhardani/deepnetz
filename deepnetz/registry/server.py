@@ -418,7 +418,7 @@ def create_registry_app(db_path: str = ""):
             db.commit()
 
     def _auth_success_page(user: dict) -> HTMLResponse:
-        """Return a nice success page after login."""
+        """Return success page after OAuth login — saves key + redirects."""
         return HTMLResponse(f"""<!DOCTYPE html>
 <html><head><title>DeepNetz — Login erfolgreich</title>
 <style>
@@ -428,15 +428,14 @@ body {{ font-family: -apple-system, sans-serif; background: #0d1117; color: #e6e
   border: 1px solid #30363d; border-radius: 16px; }}
 h2 {{ color: #3fb950; margin-bottom: 8px; }}
 p {{ color: #8b949e; font-size: 14px; }}
-code {{ background: #21262d; padding: 4px 10px; border-radius: 4px; font-size: 13px; color: #58a6ff; }}
 </style></head><body>
 <div class="card">
-  <h2>Login erfolgreich</h2>
-  <p>Willkommen, <strong>{user['username']}</strong>!</p>
-  <p style="margin-top:16px;font-size:12px;color:#6e7681;">
-    Dein API-Key wurde an das CLI übermittelt.<br>
-    Du kannst dieses Fenster schließen.
-  </p>
+  <h2>Willkommen, {user['username']}!</h2>
+  <p>Weiterleitung zum Model-Katalog...</p>
+  <script>
+    localStorage.setItem('deepnetz_cfg', JSON.stringify({{apikey: '{user.get("api_key","")}', username: '{user["username"]}'}}));
+    setTimeout(function(){{ window.location.href = 'https://deepnetz.com/models'; }}, 1500);
+  </script>
 </div>
 </body></html>""")
 
