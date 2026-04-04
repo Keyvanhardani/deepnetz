@@ -173,10 +173,12 @@ class Model:
         self.conversation = []
 
     @staticmethod
-    def _parse_budget(budget: str, auto_value: int) -> int:
-        if budget == "auto":
+    def _parse_budget(budget, auto_value: int) -> int:
+        if isinstance(budget, (int, float)):
+            return int(budget) if budget else auto_value
+        if budget == "auto" or not budget:
             return auto_value
-        budget = budget.strip().upper()
+        budget = str(budget).strip().upper()
         if budget.endswith("GB"):
             return int(float(budget[:-2]) * 1024)
         elif budget.endswith("MB"):
