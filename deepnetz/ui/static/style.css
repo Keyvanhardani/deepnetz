@@ -1688,6 +1688,34 @@ tr:hover td { background: var(--bg-hover); }
   position: relative;
 }
 
+/* ---- Think/Reasoning Blocks ---- */
+.think-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(88, 166, 255, 0.05);
+  overflow: hidden;
+}
+.think-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+}
+.think-summary:hover { background: rgba(88, 166, 255, 0.1); }
+.think-content {
+  padding: 8px 12px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+}
+
 /* ---- Model Groups ---- */
 .model-group-header {
   display: flex;

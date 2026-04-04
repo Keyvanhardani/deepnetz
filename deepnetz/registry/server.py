@@ -418,9 +418,16 @@ def create_registry_app(db_path: str = ""):
             db.commit()
 
     def _auth_success_page(user: dict) -> HTMLResponse:
-        """Return success page after OAuth login — saves key + redirects."""
+        """Return success page after OAuth login — redirects to deepnetz.com with credentials."""
+        import urllib.parse
+        params = urllib.parse.urlencode({
+            "username": user["username"],
+            "apikey": user.get("api_key", ""),
+        })
+        redirect_url = f"https://deepnetz.com/auth/callback?{params}"
         return HTMLResponse(f"""<!DOCTYPE html>
 <html><head><title>DeepNetz — Login erfolgreich</title>
+<meta http-equiv="refresh" content="1;url={redirect_url}">
 <style>
 body {{ font-family: -apple-system, sans-serif; background: #0d1117; color: #e6edf3;
   display: flex; align-items: center; justify-content: center; min-height: 100vh; }}
@@ -431,11 +438,7 @@ p {{ color: #8b949e; font-size: 14px; }}
 </style></head><body>
 <div class="card">
   <h2>Willkommen, {user['username']}!</h2>
-  <p>Weiterleitung zum Model-Katalog...</p>
-  <script>
-    localStorage.setItem('deepnetz_cfg', JSON.stringify({{apikey: '{user.get("api_key","")}', username: '{user["username"]}'}}));
-    setTimeout(function(){{ window.location.href = 'https://deepnetz.com/models'; }}, 1500);
-  </script>
+  <p>Weiterleitung...</p>
 </div>
 </body></html>""")
 

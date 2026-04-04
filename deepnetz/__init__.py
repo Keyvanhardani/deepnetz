@@ -8,7 +8,7 @@ https://deepnetz.com
 https://github.com/Keyvanhardani/deepnetz
 """
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 __author__ = "Keyvan Hardani"
 
 def __getattr__(name):

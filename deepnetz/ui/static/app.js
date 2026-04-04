@@ -42,6 +42,21 @@ DN.util = {
 
   md: function(text) {
     if (!text) return '';
+
+    // Process <think>...</think> blocks (reasoning/thinking)
+    var thinkBlocks = [];
+    text = text.replace(/<think>([\s\S]*?)<\/think>/g, function(m, content) {
+      var idx = thinkBlocks.length;
+      thinkBlocks.push(content.trim());
+      return '\x00THINK' + idx + '\x00';
+    });
+    // Also handle <reasoning>...</reasoning>
+    text = text.replace(/<reasoning>([\s\S]*?)<\/reasoning>/g, function(m, content) {
+      var idx = thinkBlocks.length;
+      thinkBlocks.push(content.trim());
+      return '\x00THINK' + idx + '\x00';
+    });
+
     // Process code blocks first (preserve content)
     var codeBlocks = [];
     var processed = text.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
@@ -91,6 +106,12 @@ DN.util = {
         '<div class="code-block-header">' + langLabel +
         '<button class="code-copy-btn" onclick="DN.util.copyCode(this)" title="Copy code"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>' +
         '</div><pre><code>' + DN.util.esc(block.code) + '</code></pre></div><p>';
+    });
+
+    // Restore think blocks
+    h = h.replace(/\x00THINK(\d+)\x00/g, function(m, idx) {
+      var think = DN.util.esc(thinkBlocks[parseInt(idx)]);
+      return '</p><details class="think-block"><summary class="think-summary"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-4 12.73V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.27A7 7 0 0 0 12 2z"/><line x1="9" y1="21" x2="15" y2="21"/></svg> Thinking</summary><div class="think-content">' + think.replace(/\n/g, '<br>') + '</div></details><p>';
     });
 
     // Clean empty paragraphs

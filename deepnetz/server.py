@@ -62,7 +62,11 @@ def create_app(model_path: str,
         temperature: float = 0.7
         stream: bool = False
         session_id: str = ""
-        reasoning: bool = False  # Enable reasoning mode
+        reasoning: bool = False
+        think_mode: bool = False
+        tool_call: bool = False
+        web_search: bool = False
+        images: List[str] = []  # base64 encoded images
 
     @app.get("/v1/models")
     async def list_models():
@@ -81,13 +85,58 @@ def create_app(model_path: str,
 
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
+        # Vision: attach images to last user message
+        if req.images:
+            from deepnetz.engine.features import prepare_vision_message
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "user":
+                    text = messages[i]["content"] if isinstance(messages[i]["content"], str) else str(messages[i]["content"])
+                    messages[i] = prepare_vision_message(text, image_base64=req.images)
+                    break
+
+        # Think mode: wrap prompt with <think> instruction
+        if req.think_mode:
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "user" and isinstance(messages[i]["content"], str):
+                    messages[i]["content"] = (
+                        messages[i]["content"] + "\n\n"
+                        "Think carefully before answering. Use <think>...</think> tags "
+                        "for your internal reasoning, then give your answer."
+                    )
+                    break
+
         # Reasoning mode: add reasoning instructions to last user message
-        if req.reasoning:
+        elif req.reasoning:
             from deepnetz.engine.features import format_reasoning_prompt
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "user" and isinstance(messages[i]["content"], str):
                     messages[i]["content"] = format_reasoning_prompt(messages[i]["content"], True)
                     break
+
+        # Tool calling: add tool instruction
+        if req.tool_call:
+            tool_instruction = {
+                "role": "system",
+                "content": (
+                    "You have access to tools. When you need to use a tool, "
+                    "output a JSON block with {\"name\": \"tool_name\", \"arguments\": {...}}. "
+                    "Available tools: calculator, web_search, code_interpreter."
+                ),
+            }
+            messages.insert(0, tool_instruction)
+
+        # Web search: add search context instruction
+        if req.web_search:
+            search_instruction = {
+                "role": "system",
+                "content": (
+                    "The user wants you to search the web for current information. "
+                    "Indicate when you would search by writing [SEARCH: query]. "
+                    "Then provide the best answer based on your knowledge, noting "
+                    "that real-time search is not yet connected."
+                ),
+            }
+            messages.insert(0, search_instruction)
 
         config = GenerationConfig(
             max_tokens=req.max_tokens, temperature=req.temperature
