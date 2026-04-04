@@ -35,9 +35,13 @@ def mount_ui(app):
         return html
 
     @app.get("/", response_class=HTMLResponse)
+    async def dashboard():
+        return _render("dashboard.html")
+
     @app.get("/chat", response_class=HTMLResponse)
+    async def chat_page():
+        return _render("chat.html")
+
     @app.get("/models", response_class=HTMLResponse)
-    @app.get("/monitor", response_class=HTMLResponse)
-    @app.get("/settings", response_class=HTMLResponse)
-    async def spa():
-        return _render("index.html")
+    async def models_page():
+        return _render("models.html")
