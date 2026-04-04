@@ -273,46 +273,153 @@ def _device_flow_login(client):
 
 
 def cmd_search(args):
-    from deepnetz.registry.client import RegistryClient
-    client = RegistryClient()
+    from deepnetz.engine.cards import load_cards, search_cards
 
-    if not client.is_authenticated:
-        print(f"\n  Bitte zuerst einloggen: deepnetz login\n")
+    # 1. Search cached cards first (instant, no login needed)
+    cards = load_cards()
+    results = search_cards(args.query, cards)
+
+    if results:
+        print(f"\n  DeepNetz Modelle — '{args.query}' ({len(results)} Treffer)")
+        print(f"  {'─' * 65}")
+        for c in results[:args.limit]:
+            params = f"{c.params_b:.0f}B" if c.params_b else ""
+            active = f" ({c.active_params_b:.0f}B aktiv)" if c.active_params_b != c.params_b and c.active_params_b else ""
+            tags = " ".join(f"[{t}]" for t in c.tags[:3])
+            quants_count = len(set(q["name"] for q in c.quants if q["name"]))
+            dl = f"{c.downloads // 1000}k" if c.downloads > 1000 else str(c.downloads)
+            print(f"  {c.name:<30} {params:>5}{active:<15} {quants_count} quants  {dl:>6} dl  {tags}")
+        print(f"\n  Pull: deepnetz pull <name>")
+        if len(results) > args.limit:
+            print(f"  ({len(results) - args.limit} weitere Treffer nicht angezeigt)")
+        print()
         return
 
+    # 2. Fallback: Live HF search via registry
     try:
-        results = client.search(args.query, limit=args.limit)
-    except RuntimeError as e:
-        print(f"\n  Fehler: {e}\n")
-        return
-
-    if not results:
-        print(f"\n  Keine Ergebnisse für '{args.query}'.\n")
-        return
-
-    print(f"\n  Suchergebnisse für '{args.query}' ({len(results)} Treffer)")
-    print(f"  {'─' * 60}")
-    for m in results:
-        repo = m.get("repo", "")
-        dl = m.get("downloads", 0)
-        dl_str = f"{dl // 1000}k" if dl > 1000 else str(dl)
-        print(f"  {repo:<45} {dl_str:>8} Downloads")
-    print(f"\n  Pull: deepnetz pull <repo>\n")
-
-
-def cmd_pull(args):
-    from deepnetz.engine.downloader import pull_model
-    from deepnetz.registry.client import RegistryClient
-
-    # Log pull to registry
-    try:
+        from deepnetz.registry.client import RegistryClient
         client = RegistryClient()
-        if client.is_authenticated:
-            client.log_pull(args.model, quant=args.quant)
+        hf_results = client.search(args.query, limit=args.limit)
+        if hf_results:
+            print(f"\n  HuggingFace Suche — '{args.query}' ({len(hf_results)} Treffer)")
+            print(f"  {'─' * 60}")
+            for m in hf_results:
+                repo = m.get("repo", "")
+                dl = m.get("downloads", 0)
+                dl_str = f"{dl // 1000}k" if dl > 1000 else str(dl)
+                print(f"  {repo:<45} {dl_str:>8} Downloads")
+            print(f"\n  Pull: deepnetz pull <repo>\n")
+            return
     except Exception:
         pass
 
-    pull_model(args.model, quant=args.quant)
+    print(f"\n  Keine Ergebnisse für '{args.query}'.")
+    print(f"  Versuche: deepnetz pull <hf-repo-name>\n")
+
+
+def cmd_pull(args):
+    from deepnetz.engine.cards import load_cards, search_cards, recommend_quant
+    from deepnetz.engine.downloader import pull_model
+    from deepnetz.engine.hardware import detect_hardware
+
+    model_name = args.model
+    auto = getattr(args, 'yes', False)
+
+    # 1. Find model card
+    cards = load_cards()
+    matches = search_cards(model_name, cards)
+    card = matches[0] if matches else None
+
+    if card and card.quants and not auto:
+        # 2. Show model info + variants
+        hw = detect_hardware()
+        rec = recommend_quant(card, vram_mb=hw.total_vram_mb, ram_mb=hw.ram_mb)
+        rec_name = rec["name"] if rec else "Q4_K_M"
+
+        print(f"\n  {card.name}")
+        if card.params_b:
+            active = f" ({card.active_params_b:.0f}B aktiv)" if card.active_params_b != card.params_b else ""
+            print(f"  {card.params_b:.0f}B Parameter{active} | {card.architecture}")
+        if card.license:
+            print(f"  Lizenz: {card.license}", end="")
+        if card.context_length:
+            print(f" | Context: {card.context_length:,}", end="")
+        print()
+        print(f"  {'─' * 50}")
+
+        # Show quant variants
+        seen = set()
+        variants = []
+        for q in card.quants:
+            if q["name"] in seen or not q["name"]:
+                continue
+            seen.add(q["name"])
+            variants.append(q)
+
+        for i, q in enumerate(variants, 1):
+            size_str = f"{q['size_mb'] / 1024:.1f} GB" if q['size_mb'] > 1024 else f"{q['size_mb']} MB"
+            marker = " ← Empfohlen" if q["name"] == rec_name else ""
+            print(f"  {i:>2}. {q['name']:<10} {size_str:>10}{marker}")
+
+        # Check local + Ollama
+        print(f"  {'─' * 50}")
+        from deepnetz.engine.downloader import resolve_local_model
+        local = resolve_local_model(model_name)
+        if local:
+            print(f"  Lokal: {local}")
+
+        # Check Ollama
+        try:
+            from deepnetz.backends.ollama import OllamaBackend
+            ob = OllamaBackend()
+            if ob.detect().available:
+                ollama_models = ob.list_models()
+                for m in ollama_models:
+                    if model_name.lower().replace("-", "").replace("_", "") in m.name.lower().replace("-", "").replace("_", ""):
+                        print(f"  Ollama: {m.name}")
+                        break
+        except Exception:
+            pass
+
+        # 3. Ask for variant
+        default_idx = 1
+        for i, q in enumerate(variants, 1):
+            if q["name"] == rec_name:
+                default_idx = i
+                break
+
+        try:
+            choice = input(f"\n  Variante [{default_idx}]: ").strip()
+            if not choice:
+                choice = str(default_idx)
+            idx = int(choice) - 1
+            if 0 <= idx < len(variants):
+                selected = variants[idx]
+            else:
+                selected = variants[default_idx - 1]
+        except (ValueError, EOFError, KeyboardInterrupt):
+            selected = variants[default_idx - 1]
+            print()
+
+        print(f"\n  Pulling {card.name} {selected['name']}...")
+        from deepnetz.registry.store import RegistryStore
+        store = RegistryStore()
+        store._pull_from_repo(selected["repo"], selected["name"])
+
+    else:
+        # No card found or --yes flag: direct pull
+        if args.quant == "auto" and auto:
+            pass  # Let pull_model handle it
+        pull_model(model_name, quant=args.quant)
+
+    # Log pull
+    try:
+        from deepnetz.registry.client import RegistryClient
+        client = RegistryClient()
+        if client.is_authenticated:
+            client.log_pull(model_name, quant=args.quant)
+    except Exception:
+        pass
 
 
 def cmd_list(args):
@@ -455,6 +562,7 @@ def main():
     p_pull = subparsers.add_parser("pull", help="Modell herunterladen")
     p_pull.add_argument("model", help="Modellname oder HF Repo (z.B. Qwen3.5-35B)")
     p_pull.add_argument("--quant", default="auto", help="Quantisierung (auto, Q4_K_M, Q8_0, ...)")
+    p_pull.add_argument("-y", "--yes", action="store_true", help="Automatisch beste Variante wählen")
 
     # list
     p_list = subparsers.add_parser("list", help="Lokale Modelle anzeigen")
