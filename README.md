@@ -17,7 +17,7 @@ deepnetz run Qwen3.5-35B                        # auto-detect hardware, run
 deepnetz serve Qwen3.5-35B --port 8080          # OpenAI-compatible API + Web UI
 ```
 
-Web App: [deepnetz.com/app](https://deepnetz.com/app) | Docs: [deepnetz.com](https://deepnetz.com)
+Models: [deepnetz.com/models](https://deepnetz.com/models) | Docs: [deepnetz.com](https://deepnetz.com)
 
 ## What it does
 
@@ -131,16 +131,16 @@ Up to 10x memory reduction through stacked compression:
 
 ## Web UI
 
-Start the server and open [deepnetz.com/app](https://deepnetz.com/app) — it connects to your local instance:
-
 ```bash
 deepnetz serve model.gguf --port 8080
-# Open https://deepnetz.com/app → Connect to localhost:8080
+# Open http://localhost:8080
 ```
 
-Features: Chat with streaming, vision (image upload), reasoning mode, model search & pull, model switching, system monitor, settings.
-
-Or use the built-in UI at `http://localhost:8080/chat`.
+Professional SPA with 4 pages:
+- **Chat** — Streaming, markdown, conversation history, vision, reasoning
+- **Models** — Local models + 130+ registry cards, search, load/unload
+- **Monitor** — Grafana-style: GPU/CPU/RAM gauges, tok/s sparkline chart
+- **Settings** — GPU/CPU toggle, context length, temperature, backend, KV compression
 
 ## Vision & Multimodal
 
